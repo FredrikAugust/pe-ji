@@ -182,6 +182,8 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   overflow: auto;
   background: var(--desk);
   padding: 16px;
+  /* Keep the line being typed off the bottom edge. */
+  scroll-padding-bottom: 40vh;
 }
 
 .page {
@@ -194,7 +196,7 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   font-family: var(--doc);
   color: var(--ink);
   line-height: 2;
-  padding: 2em 2.5em;
+  padding: 2em 2.5em 50vh;
   outline: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -36,6 +36,14 @@ pub fn mcp_sync(state: tauri::State<Mcp>, name: String, text: String, selection:
     *state.doc.lock().unwrap() = Doc { name, text, selection, notes };
 }
 
+/// One MCP message that arrived through the cloud relay (the page holds that socket).
+#[tauri::command]
+pub fn mcp_handle(app: tauri::AppHandle, state: tauri::State<Mcp>, msg: Value) -> Option<Value> {
+    handle(&msg, &state, &|event, payload| {
+        let _ = app.emit(event, payload);
+    })
+}
+
 /// Start the server once per run. Returns `{ url, token }`.
 #[tauri::command]
 pub fn mcp_start(app: tauri::AppHandle) -> Result<Value, String> {

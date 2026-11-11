@@ -64,7 +64,21 @@ The 辞書 panel searches Jisho and shows the word with furigana, JLPT level, wh
 
 Quotes must match the source text exactly (`occurrence` picks between repeats). Notes are highlighted on the page and listed in the メモ panel, where a correction can be applied or dismissed. Notes live for the session only.
 
-The server listens on localhost only. For a cloud agent, expose it with a tunnel (for example `cloudflared tunnel --url http://127.0.0.1:4417`) and use the https URL plus `/mcp` with the same token. Anyone with the token can read and edit the open document; delete `mcp.token` in the app config folder to get a new one.
+The server listens on localhost only; delete `mcp.token` in the app config folder to get a new token.
+
+### Cloud AI (Grok and friends) through the relay
+
+A cloud agent cannot reach your computer, so the app connects out to a tiny relay on Cloudflare Workers (`relay/`, free tier). The agent always uses the same `https://pico-relay.<you>.workers.dev/mcp`; whichever computer opened the app last answers, and focusing the app on the other computer takes it back.
+
+```bash
+cd relay && pnpm install
+pnpm exec wrangler login
+pnpm exec wrangler secret put APP_KEY   # the app's key, pasted into AIと接続… on each computer
+pnpm exec wrangler secret put BOT_KEY   # the agent's Bearer token
+pnpm run deploy
+```
+
+`pnpm dev` runs the relay locally and `pnpm test` checks it end to end (keys in `.dev.vars`). Anyone with BOT_KEY can read and edit the open document.
 
 ## Keybindings
 

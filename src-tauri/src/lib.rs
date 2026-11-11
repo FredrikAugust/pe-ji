@@ -220,6 +220,7 @@ pub fn run() {
             translate,
             mcp::mcp_sync,
             mcp::mcp_start,
+            mcp::mcp_handle,
             readings
         ])
         .on_window_event(|window, event| {

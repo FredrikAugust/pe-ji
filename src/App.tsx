@@ -57,6 +57,7 @@ import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
 import { Notes } from "./ui/Notes";
 import { nth, place, type Note } from "./lib/notes";
+import { connectRelay, type RelayStatus } from "./lib/relay";
 import { Page, type PageHandle } from "./ui/Page";
 
 const HIT_KEY = "pico-sakubun-hits";
@@ -64,6 +65,13 @@ const HIT_SESSION = "pico-sakubun-hit-session";
 const FURI_KEY = "pico.furigana";
 const AI_KEY = "pico.ai";
 const PDF_WIDTH_KEY = "pico.pdfWidth";
+const RELAY_KEY = "pico.relay";
+const RELAY_LABEL: Record<RelayStatus, string> = {
+  connecting: "接続中…",
+  online: "接続しています",
+  offline: "つながりません（再試行中）",
+  replaced: "別のパソコンが使っています",
+};
 const RECENT_KEY = "pico.recent";
 
 export function App() {
@@ -129,6 +137,16 @@ export function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
   const [ai, setAi] = useState<{ url: string; token: string } | null>(null);
+  const [relay, setRelay] = useState<{ url: string; key: string } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(RELAY_KEY) ?? "null") as { url: string; key: string } | null;
+    } catch {
+      return null;
+    }
+  });
+  const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
+  const [relayEpoch, setRelayEpoch] = useState(0);
+  const relayFormRef = useRef<HTMLFormElement>(null);
   const [trSeed, setTrSeed] = useState<{ q: string; n: number } | null>(null);
   const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
 
@@ -530,6 +548,7 @@ export function App() {
           break;
         case "dialog.confirm":
           if (overlayRef.current === "saveas") commitSaveAs();
+          else if (overlayRef.current === "ai") relayFormRef.current?.requestSubmit();
           else if (overlayRef.current === "confirm") {
             void (async () => {
               const ok = await save();
@@ -541,7 +560,6 @@ export function App() {
             })();
           } else if (
             overlayRef.current === "about" ||
-            overlayRef.current === "ai" ||
             overlayRef.current === "cheatsheet"
           ) {
             setOverlay("none");
@@ -694,6 +712,26 @@ export function App() {
       // No storage: the user connects from the menu.
     }
   }, []);
+
+  // The cloud relay: the page holds the socket, Rust answers each message.
+  useEffect(() => {
+    if (!ai || !relay || !isTauri()) return;
+    return connectRelay(
+      relay.url,
+      relay.key,
+      async (msg) => (await import("@tauri-apps/api/core")).invoke("mcp_handle", { msg }),
+      setRelayStatus,
+    );
+  }, [ai, relay, relayEpoch]);
+
+  // Another computer took over; coming back to this window takes it back.
+  useEffect(() => {
+    if (relayStatus !== "replaced") return;
+    flash("別のパソコンが AI 接続を使っています。このウィンドウに戻ると取り戻します。");
+    const back = () => setRelayEpoch((n) => n + 1);
+    window.addEventListener("focus", back);
+    return () => window.removeEventListener("focus", back);
+  }, [relayStatus, flash]);
 
   // Push the document to Rust a moment after it, the selection or the notes change.
   useEffect(() => {
@@ -1493,8 +1531,45 @@ export function App() {
                   Bearer トークン
                   <input readOnly value={ai.token} onFocus={(e) => e.target.select()} />
                 </label>
+                <h2>クラウドの AI（Grok など）</h2>
+                <form
+                  ref={relayFormRef}
+                  data-testid="relay-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = new FormData(e.currentTarget);
+                    const url = String(f.get("url") ?? "").trim();
+                    const key = String(f.get("key") ?? "").trim();
+                    const next = url && key ? { url, key } : null;
+                    try {
+                      if (next) localStorage.setItem(RELAY_KEY, JSON.stringify(next));
+                      else localStorage.removeItem(RELAY_KEY);
+                    } catch {
+                      // Without storage the relay works until the app closes.
+                    }
+                    setRelay(next);
+                    if (!next) setRelayStatus(null);
+                  }}
+                >
+                  <label className="field">
+                    リレーの URL
+                    <input name="url" placeholder="https://pico-relay.＜あなた＞.workers.dev" defaultValue={relay?.url ?? ""} />
+                  </label>
+                  <label className="field">
+                    APP_KEY
+                    <input name="key" type="password" defaultValue={relay?.key ?? ""} />
+                  </label>
+                  <div className="dialog-actions">
+                    <span className="cheat-note" data-testid="relay-status">
+                      {relay ? `状態：${relayStatus ? RELAY_LABEL[relayStatus] : "—"}` : "未設定"}
+                    </span>
+                    <button type="submit" className="tbtn lime">
+                      保存して接続
+                    </button>
+                  </div>
+                </form>
                 <p className="cheat-note">
-                  クラウドの AI から使うときは、トンネルで公開します（例：<code>cloudflared tunnel --url http://127.0.0.1:4417</code>）。出てきた https の URL に <code>/mcp</code> を付けて、同じトークンを使います。トークンを知っている人は作文を読めて書けます。
+                  Grok には <code>{relay ? `${relay.url.replace(/\/+$/, "")}/mcp` : "＜リレーの URL＞/mcp"}</code> と BOT_KEY を設定します。どのパソコンで開いても同じ URL で、最後に開いたパソコンにつながります。キーを知っている人は作文を読めて書けます。
                 </p>
                 <div className="dialog-actions">
                   <button type="button" className="tbtn cyan" onClick={() => run("dialog.cancel")}>

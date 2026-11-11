@@ -4,7 +4,7 @@ fn main() {
     let dist = std::path::Path::new("../dist");
     if !dist.join("index.html").exists() {
         std::fs::create_dir_all(dist).expect("create dist");
-        std::fs::write(dist.join("index.html"), "<!doctype html><title>ぴこぴこ作文帳</title>\n")
+        std::fs::write(dist.join("index.html"), "<!doctype html><title>pe-ji</title>\n")
             .expect("write dist placeholder");
     }
     tauri_build::build()

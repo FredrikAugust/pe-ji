@@ -1,17 +1,39 @@
 /**
- * Furigana markup parser. Keep this in lockstep with `crates/pico-core`
- * and `testdata/ruby_cases.json`.
+ * The file is plain text, one source line per paragraph.
  *
- * - `漢字《かんじ》` implicit base (kanji run immediately before 《)
- * - `｜base《reading》` or `|base《reading》` explicit base
- * - `{base|reading}` brace form (half-width pipe)
- * - `\X` escapes the next character
- * - ruby never crosses a newline; unmatched brackets stay literal
+ * Line prefix: leading tabs indent; then `# `/`## `/`### ` heading, `- `/`* `
+ * bullet, or an Aozora `［＃N字下げ］`. A line `| a | b |` is a table row.
+ *
+ * Inline: ruby (`漢字《かんじ》`, `｜食べ《た》`, `{漢字|かんじ}`), `**bold**`,
+ * `*italic*`, Aozora notes `［＃…］`, and `\X` escapes. Ruby never crosses a
+ * newline; unmatched markup stays literal. Notes we do not understand are kept
+ * verbatim and hidden.
  */
 
-export type Segment =
-  | { type: "text"; text: string; start: number; end: number }
-  | { type: "ruby"; base: string; reading: string; start: number; end: number };
+export type Inline =
+  | { t: "text"; s: string; from: number; to: number }
+  | { t: "ruby"; base: string; reading: string; raw: string }
+  | { t: "note"; raw: string }
+  | { t: "b" | "i"; kids: Inline[] }
+  | { t: "az"; cls: string; kids: Inline[] };
+
+export type Kind = "p" | "h1" | "h2" | "h3" | "li" | "row";
+
+export interface Line {
+  pre: string;
+  kind: Kind;
+  /** In em. */
+  indent: number;
+  body: string;
+}
+
+export interface Cell {
+  l: string;
+  r: string;
+  src: string;
+  /** Offset of `src` in the line. */
+  at: number;
+}
 
 const BSLASH = 0x5c;
 const LB = 0x7b;
@@ -20,10 +42,7 @@ const PIPE = 0x7c;
 const FPIPE = 0xff5c;
 const OPEN = 0x300a;
 const CLOSE = 0x300b;
-
-export function isNl(cp: number): boolean {
-  return cp === 0x0a || cp === 0x0d;
-}
+const STAR = 0x2a;
 
 export function isKanji(cp: number): boolean {
   return (
@@ -35,266 +54,337 @@ export function isKanji(cp: number): boolean {
     (cp >= 0x3400 && cp <= 0x4dbf) ||
     (cp >= 0x4e00 && cp <= 0x9fff) ||
     (cp >= 0xf900 && cp <= 0xfaff) ||
-    (cp >= 0x20000 && cp <= 0x2a6df) ||
-    (cp >= 0x2a700 && cp <= 0x2b73f) ||
-    (cp >= 0x2b740 && cp <= 0x2b81f) ||
-    (cp >= 0x2b820 && cp <= 0x2ceaf) ||
-    (cp >= 0x2ceb0 && cp <= 0x2ebef) ||
-    (cp >= 0x30000 && cp <= 0x3134f) ||
-    (cp >= 0x2f800 && cp <= 0x2fa1f)
+    (cp >= 0x20000 && cp <= 0x2ebef) ||
+    (cp >= 0x2f800 && cp <= 0x2fa1f) ||
+    (cp >= 0x30000 && cp <= 0x3134f)
   );
 }
 
 export function readCp(s: string, i: number): { cp: number; next: number } | null {
   if (i >= s.length) return null;
-  const c = s.charCodeAt(i);
-  if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
-    const c2 = s.charCodeAt(i + 1);
-    if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-      return { cp: (c - 0xd800) * 0x400 + (c2 - 0xdc00) + 0x10000, next: i + 2 };
-    }
-  }
-  return { cp: c, next: i + 1 };
+  const cp = s.codePointAt(i)!;
+  return { cp, next: i + (cp > 0xffff ? 2 : 1) };
 }
 
 export function isPureKanji(s: string): boolean {
   if (!s) return false;
-  let i = 0;
-  while (i < s.length) {
-    const c = readCp(s, i);
-    if (!c || !isKanji(c.cp)) return false;
-    i = c.next;
-  }
+  for (const ch of s) if (!isKanji(ch.codePointAt(0)!)) return false;
   return true;
 }
 
-function pushText(out: Segment[], text: string, start: number, end: number) {
-  if (end <= start && !text) return;
-  const last = out[out.length - 1];
-  if (last && last.type === "text" && last.end === start) {
-    last.text += text;
-    last.end = end;
-    return;
-  }
-  out.push({ type: "text", text, start, end });
-}
-
+/** Reads `《…》` at `i`. Lines never contain a newline, so only the bracket can end it. */
 function tryReading(s: string, i: number): { reading: string; next: number } | null {
-  const open = readCp(s, i);
-  if (!open || open.cp !== OPEN) return null;
-  let j = open.next;
+  if (s.charCodeAt(i) !== OPEN) return null;
+  let j = i + 1;
   let reading = "";
   while (j < s.length) {
-    const c = readCp(s, j)!;
-    if (isNl(c.cp)) return null;
-    if (c.cp === BSLASH) {
-      const n = readCp(s, c.next);
-      if (!n || isNl(n.cp)) return null;
+    const c = s.charCodeAt(j);
+    if (c === BSLASH && j + 1 < s.length) {
+      const n = readCp(s, j + 1)!;
       reading += String.fromCodePoint(n.cp);
       j = n.next;
       continue;
     }
-    if (c.cp === CLOSE) return { reading, next: c.next };
-    reading += String.fromCodePoint(c.cp);
-    j = c.next;
+    if (c === CLOSE) return { reading, next: j + 1 };
+    reading += s[j];
+    j++;
   }
   return null;
 }
 
 function tryExplicit(s: string, i: number): { base: string; reading: string; next: number } | null {
-  const pipe = readCp(s, i)!;
-  let j = pipe.next;
+  let j = i + 1;
   let base = "";
   while (j < s.length) {
-    const c = readCp(s, j)!;
-    if (isNl(c.cp)) return null;
-    if (c.cp === BSLASH) {
-      const n = readCp(s, c.next);
-      if (!n || isNl(n.cp)) return null;
+    const c = s.charCodeAt(j);
+    if (c === BSLASH && j + 1 < s.length) {
+      const n = readCp(s, j + 1)!;
       base += String.fromCodePoint(n.cp);
       j = n.next;
       continue;
     }
-    if (c.cp === OPEN) {
+    if (c === OPEN) {
       if (!base) return null;
-      const reading = tryReading(s, j);
-      if (!reading) return null;
-      return { base, reading: reading.reading, next: reading.next };
+      const r = tryReading(s, j);
+      return r && { base, reading: r.reading, next: r.next };
     }
-    base += String.fromCodePoint(c.cp);
-    j = c.next;
+    base += s[j];
+    j++;
   }
   return null;
 }
 
 function tryBrace(s: string, i: number): { base: string; reading: string; next: number } | null {
-  const open = readCp(s, i)!;
-  let j = open.next;
+  let j = i + 1;
   let base = "";
   let reading = "";
   let sawPipe = false;
   while (j < s.length) {
-    const c = readCp(s, j)!;
-    if (isNl(c.cp)) return null;
-    if (c.cp === BSLASH) {
-      const n = readCp(s, c.next);
-      if (!n || isNl(n.cp)) return null;
+    const c = s.charCodeAt(j);
+    if (c === BSLASH && j + 1 < s.length) {
+      const n = readCp(s, j + 1)!;
       if (sawPipe) reading += String.fromCodePoint(n.cp);
       else base += String.fromCodePoint(n.cp);
       j = n.next;
       continue;
     }
-    if (c.cp === PIPE && !sawPipe) {
+    if (c === PIPE && !sawPipe) {
       sawPipe = true;
-      j = c.next;
+      j++;
       continue;
     }
-    if (c.cp === RB) {
-      if (!sawPipe || !base) return null;
-      return { base, reading, next: c.next };
-    }
-    if (sawPipe) reading += String.fromCodePoint(c.cp);
-    else base += String.fromCodePoint(c.cp);
-    j = c.next;
+    if (c === RB) return sawPipe && base ? { base, reading, next: j + 1 } : null;
+    if (sawPipe) reading += s[j];
+    else base += s[j];
+    j++;
   }
   return null;
 }
 
-export function parse(input: string): Segment[] {
-  const out: Segment[] = [];
+const DOTS: Record<string, string> = {
+  "": "dot",
+  白ゴマ: "dot dot-open",
+  丸: "dot dot-circle",
+  白丸: "dot dot-open-circle",
+  二重丸: "dot dot-double",
+  蛇の目: "dot dot-double",
+  黒三角: "dot dot-tri",
+  白三角: "dot dot-open-tri",
+};
+
+/** Aozora emphasis named by a note body, e.g. `太字`, `白ゴマ傍点`. */
+function azClass(name: string): string | null {
+  if (name === "太字") return "az-b";
+  const m = /^(.*)傍点$/.exec(name);
+  return m ? (DOTS[m[1]] ?? "dot") : null;
+}
+
+export function visible(items: Inline[]): string {
+  let out = "";
+  for (const it of items) {
+    if (it.t === "text") out += it.s;
+    else if (it.t === "ruby") out += it.base;
+    else if (it.t !== "note") out += visible(it.kids);
+  }
+  return out;
+}
+
+/** Wrap the last `target.length` visible characters of `out` (Aozora 前方参照). */
+function wrapTail(out: Inline[], target: string, cls: string) {
+  let k = out.length;
+  let seen = 0;
+  while (k > 0 && seen < target.length) {
+    k--;
+    seen += visible([out[k]]).length;
+  }
+  if (seen < target.length || !visible(out.slice(k)).endsWith(target)) return;
+  const first = out[k];
+  if (seen > target.length) {
+    // Only split plain text with no escapes; anything else is left unstyled.
+    if (first.t !== "text" || first.to - first.from !== first.s.length) return;
+    const cut = seen - target.length;
+    out.splice(
+      k,
+      1,
+      { t: "text", s: first.s.slice(0, cut), from: first.from, to: first.from + cut },
+      { t: "text", s: first.s.slice(cut), from: first.from + cut, to: first.to },
+    );
+    k++;
+  }
+  const kids = out.slice(k);
+  out.splice(k, kids.length, { t: "az", cls, kids });
+}
+
+interface Frame {
+  close: string;
+  node: { kids: Inline[] };
+  parent: Inline[];
+  at: number;
+}
+
+export function parseInline(src: string, base = 0): Inline[] {
+  const root: Inline[] = [];
+  const stack: Frame[] = [];
+  let out = root;
+  const text = (s: string, from: number, to: number) => {
+    const last = out[out.length - 1];
+    if (last?.t === "text" && last.to === from + base) {
+      last.s += s;
+      last.to = to + base;
+    } else out.push({ t: "text", s, from: from + base, to: to + base });
+  };
+  const open = (node: Inline & { kids: Inline[] }, close: string, at: number) => {
+    out.push(node);
+    stack.push({ close, node, parent: out, at });
+    out = node.kids;
+  };
+  const closeTo = (idx: number) => {
+    out = stack[idx].parent;
+    stack.length = idx;
+  };
+
   let i = 0;
-  while (i < input.length) {
-    const c = readCp(input, i)!;
-    if (c.cp === BSLASH) {
-      const n = readCp(input, c.next);
-      if (n && !isNl(n.cp)) {
-        pushText(out, String.fromCodePoint(n.cp), i, n.next);
+  while (i < src.length) {
+    const c = src.charCodeAt(i);
+    if (c === BSLASH) {
+      const n = readCp(src, i + 1);
+      if (n) {
+        text(String.fromCodePoint(n.cp), i, n.next);
         i = n.next;
-        continue;
+      } else {
+        text("\\", i, i + 1);
+        i++;
       }
-      pushText(out, "\\", i, c.next);
-      i = c.next;
       continue;
     }
-    if (c.cp === LB) {
-      const brace = tryBrace(input, i);
-      if (brace) {
-        out.push({
-          type: "ruby",
-          base: brace.base,
-          reading: brace.reading,
-          start: i,
-          end: brace.next,
-        });
-        i = brace.next;
+    if (c === 0xff3b && src.charCodeAt(i + 1) === 0xff03) {
+      const end = src.indexOf("］", i + 2);
+      if (end > 0) {
+        const raw = src.slice(i, end + 1);
+        const body = raw.slice(2, -1);
+        const ref = /^「(.+)」[はに](.+)$/.exec(body);
+        const closing = stack.findLastIndex((f) => f.close === raw);
+        if (closing >= 0) {
+          closeTo(closing);
+          out.push({ t: "note", raw });
+        } else if (ref && azClass(ref[2])) {
+          wrapTail(out, ref[1], azClass(ref[2])!);
+          out.push({ t: "note", raw });
+        } else if (azClass(body)) {
+          out.push({ t: "note", raw });
+          open({ t: "az", cls: azClass(body)!, kids: [] }, `［＃${body}終わり］`, i);
+        } else out.push({ t: "note", raw });
+        i = end + 1;
         continue;
       }
     }
-    if (c.cp === PIPE || c.cp === FPIPE) {
-      const explicit = tryExplicit(input, i);
-      if (explicit) {
-        out.push({
-          type: "ruby",
-          base: explicit.base,
-          reading: explicit.reading,
-          start: i,
-          end: explicit.next,
-        });
-        i = explicit.next;
+    if (c === STAR) {
+      const m = src.charCodeAt(i + 1) === STAR ? "**" : "*";
+      const idx = stack.findLastIndex((f) => f.close === m);
+      if (idx >= 0) {
+        closeTo(idx);
+        i += m.length;
+        continue;
+      }
+      const closer = src.indexOf(m, i + m.length);
+      if (closer > i + m.length) {
+        open({ t: m === "**" ? "b" : "i", kids: [] }, m, i);
+        i += m.length;
         continue;
       }
     }
-    if (isKanji(c.cp)) {
-      const start = i;
-      let j = i;
-      while (j < input.length) {
-        const k = readCp(input, j)!;
+    if (c === LB || c === PIPE || c === FPIPE) {
+      const r = c === LB ? tryBrace(src, i) : tryExplicit(src, i);
+      if (r) {
+        out.push({ t: "ruby", base: r.base, reading: r.reading, raw: src.slice(i, r.next) });
+        i = r.next;
+        continue;
+      }
+    }
+    const cp = readCp(src, i)!;
+    if (isKanji(cp.cp)) {
+      let j = cp.next;
+      while (j < src.length) {
+        const k = readCp(src, j)!;
         if (!isKanji(k.cp)) break;
         j = k.next;
       }
-      const reading = tryReading(input, j);
-      if (reading) {
-        out.push({
-          type: "ruby",
-          base: input.slice(start, j),
-          reading: reading.reading,
-          start,
-          end: reading.next,
-        });
-        i = reading.next;
+      const r = tryReading(src, j);
+      if (r) {
+        out.push({ t: "ruby", base: src.slice(i, j), reading: r.reading, raw: src.slice(i, r.next) });
+        i = r.next;
+      } else {
+        text(src.slice(i, j), i, j);
+        i = j;
+      }
+      continue;
+    }
+    text(String.fromCodePoint(cp.cp), i, cp.next);
+    i = cp.next;
+  }
+
+  // Openers whose closer never came (e.g. it was escaped) become literal again.
+  while (stack.length) {
+    const f = stack.pop()!;
+    const pos = f.parent.indexOf(f.node as Inline);
+    const marker: Inline[] = f.close.startsWith("［") ? [] : [{ t: "text", s: f.close, from: f.at + base, to: f.at + base + f.close.length }];
+    f.parent.splice(pos, 1, ...marker, ...f.node.kids);
+  }
+  return root;
+}
+
+const PRE = /^(\t*)(?:(#{1,3}) |([-*]) |(［＃([0-9０-９]+)字下げ］))?/;
+const ROW = /^\|.*\|[ \t]*$/;
+const AZ_HEAD = /［＃(?:「[^」]*」は)?(?:同行|窓)?(大|中|小)見出し］/;
+
+export function parseLine(src: string): Line {
+  const m = PRE.exec(src)!;
+  const tabs = m[1].length;
+  const rest = src.slice(m[1].length);
+  if (!m[2] && !m[3] && !m[4] && ROW.test(rest)) {
+    return { pre: m[1], kind: "row", indent: tabs * 2, body: rest };
+  }
+  const pre = m[0];
+  const body = src.slice(pre.length);
+  let kind: Kind = m[2] ? (`h${m[2].length}` as Kind) : m[3] ? "li" : "p";
+  const az = m[5] ? Number(m[5].replace(/[０-９]/g, (d) => String(d.charCodeAt(0) - 0xff10))) : 0;
+  if (kind === "p") {
+    const h = AZ_HEAD.exec(body);
+    if (h) kind = h[1] === "大" ? "h1" : h[1] === "中" ? "h2" : "h3";
+  }
+  return { pre, kind, indent: tabs * 2 + az, body };
+}
+
+/** Cells of a row body (`| a | b |`). A half-width pipe inside `{…}` or escaped does not split. */
+export function splitCells(body: string, offset = 0): Cell[] {
+  const cells: Cell[] = [];
+  let start = 1;
+  let i = 1;
+  const push = (end: number) => {
+    const raw = body.slice(start, end);
+    const src = raw.trim();
+    const l = src ? raw.slice(0, raw.indexOf(src)) : raw.slice(0, 1);
+    cells.push({ l, r: raw.slice(l.length + src.length), src, at: offset + start + l.length });
+  };
+  while (i < body.length) {
+    const c = body.charCodeAt(i);
+    if (c === BSLASH) {
+      i += 2;
+      continue;
+    }
+    if (c === LB) {
+      const r = tryBrace(body, i);
+      if (r) {
+        i = r.next;
         continue;
       }
-      pushText(out, input.slice(start, j), start, j);
-      i = j;
-      continue;
     }
-    pushText(out, String.fromCodePoint(c.cp), i, c.next);
-    i = c.next;
-  }
-  return out;
-}
-
-export function renderHtml(input: string): string {
-  let out = "";
-  for (const seg of parse(input)) {
-    if (seg.type === "text") out += textToHtml(seg.text);
-    else out += `<ruby>${escapeHtml(seg.base)}<rt>${escapeHtml(seg.reading)}</rt></ruby>`;
-  }
-  return out;
-}
-
-function textToHtml(text: string): string {
-  let out = "";
-  let i = 0;
-  while (i < text.length) {
-    const c = readCp(text, i)!;
-    if (c.cp === 0x0d) {
-      out += "<br>";
-      const n = readCp(text, c.next);
-      i = n && n.cp === 0x0a ? n.next : c.next;
-      continue;
+    if (c === PIPE) {
+      push(i);
+      start = i + 1;
     }
-    if (c.cp === 0x0a) {
-      out += "<br>";
-      i = c.next;
-      continue;
-    }
-    out += escapeHtml(String.fromCodePoint(c.cp));
-    i = c.next;
+    i++;
   }
-  return out;
+  return cells;
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+/** First and last line of the Aozora header notes block (between two dashed rules). */
+export function metaRange(lines: string[]): [number, number] | null {
+  const rule = /^-{20,}\s*$/;
+  const a = lines.slice(0, 40).findIndex((l) => rule.test(l));
+  if (a < 0) return null;
+  for (let b = a + 1; b < Math.min(lines.length, a + 120); b++) if (rule.test(lines[b])) return [a, b];
+  return null;
 }
 
-export interface Inline {
-  type: "text" | "ruby";
-  text?: string;
-  base?: string;
-  reading?: string;
+const BASE_SPECIAL = /[\\｜|《》{}*]/g;
+
+export function escapeText(s: string): string {
+  return s.replace(BASE_SPECIAL, "\\$&").replace(/［＃/g, "［\\＃");
 }
 
-/** Split parsed segments into visual lines. `\r\n` and `\r` count as one break. */
-export function toLines(segments: Segment[]): Inline[][] {
-  const lines: Inline[][] = [[]];
-  for (const seg of segments) {
-    if (seg.type === "ruby") {
-      lines[lines.length - 1].push({ type: "ruby", base: seg.base, reading: seg.reading });
-      continue;
-    }
-    const normalized = seg.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    const parts = normalized.split("\n");
-    parts.forEach((part, idx) => {
-      if (part) lines[lines.length - 1].push({ type: "text", text: part });
-      if (idx < parts.length - 1) lines.push([]);
-    });
-  }
-  return lines;
+export function formatRubyMarkup(base: string, reading: string): string {
+  const r = reading.replace(/[\\》]/g, "\\$&");
+  if (isPureKanji(base)) return `${base}《${r}》`;
+  return `｜${escapeText(base)}《${r}》`;
 }

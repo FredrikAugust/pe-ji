@@ -3,8 +3,7 @@
     {
       "name": "empty",
       "input": "",
-      "segments": [],
-      "html": ""
+      "segments": []
     },
     {
       "name": "hiragana",
@@ -14,8 +13,7 @@
           "type": "text",
           "text": "ひらがな"
         }
-      ],
-      "html": "ひらがな"
+      ]
     },
     {
       "name": "latin",
@@ -25,8 +23,7 @@
           "type": "text",
           "text": "Hello, world!"
         }
-      ],
-      "html": "Hello, world!"
+      ]
     },
     {
       "name": "implicit kanji",
@@ -37,8 +34,7 @@
           "base": "漢字",
           "reading": "かんじ"
         }
-      ],
-      "html": "<ruby>漢字<rt>かんじ</rt></ruby>"
+      ]
     },
     {
       "name": "multi kanji word",
@@ -49,8 +45,7 @@
           "base": "日本語",
           "reading": "にほんご"
         }
-      ],
-      "html": "<ruby>日本語<rt>にほんご</rt></ruby>"
+      ]
     },
     {
       "name": "fullwidth pipe",
@@ -61,8 +56,7 @@
           "base": "食べ",
           "reading": "た"
         }
-      ],
-      "html": "<ruby>食べ<rt>た</rt></ruby>"
+      ]
     },
     {
       "name": "halfwidth pipe",
@@ -73,8 +67,7 @@
           "base": "今日",
           "reading": "きょう"
         }
-      ],
-      "html": "<ruby>今日<rt>きょう</rt></ruby>"
+      ]
     },
     {
       "name": "kana without pipe is literal",
@@ -84,8 +77,7 @@
           "type": "text",
           "text": "食べ《た》"
         }
-      ],
-      "html": "食べ《た》"
+      ]
     },
     {
       "name": "multiple ruby",
@@ -109,8 +101,7 @@
           "type": "text",
           "text": "です。"
         }
-      ],
-      "html": "<ruby>今日<rt>きょう</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>です。"
+      ]
     },
     {
       "name": "brace",
@@ -121,8 +112,7 @@
           "base": "漢字",
           "reading": "かんじ"
         }
-      ],
-      "html": "<ruby>漢字<rt>かんじ</rt></ruby>"
+      ]
     },
     {
       "name": "brace kana",
@@ -133,8 +123,7 @@
           "base": "食べ",
           "reading": "た"
         }
-      ],
-      "html": "<ruby>食べ<rt>た</rt></ruby>"
+      ]
     },
     {
       "name": "mixed syntax",
@@ -154,8 +143,7 @@
           "base": "晴れ",
           "reading": "はれ"
         }
-      ],
-      "html": "<ruby>今日<rt>きょう</rt></ruby>は<ruby>晴れ<rt>はれ</rt></ruby>"
+      ]
     },
     {
       "name": "unmatched open",
@@ -165,8 +153,7 @@
           "type": "text",
           "text": "漢字《かん"
         }
-      ],
-      "html": "漢字《かん"
+      ]
     },
     {
       "name": "stray close",
@@ -176,8 +163,7 @@
           "type": "text",
           "text": "》です"
         }
-      ],
-      "html": "》です"
+      ]
     },
     {
       "name": "unmatched brace",
@@ -187,8 +173,7 @@
           "type": "text",
           "text": "{漢字|かんじ"
         }
-      ],
-      "html": "{漢字|かんじ"
+      ]
     },
     {
       "name": "empty reading aozora",
@@ -199,8 +184,7 @@
           "base": "漢字",
           "reading": ""
         }
-      ],
-      "html": "<ruby>漢字<rt></rt></ruby>"
+      ]
     },
     {
       "name": "empty reading brace",
@@ -211,8 +195,7 @@
           "base": "漢字",
           "reading": ""
         }
-      ],
-      "html": "<ruby>漢字<rt></rt></ruby>"
+      ]
     },
     {
       "name": "empty base pipe",
@@ -222,8 +205,7 @@
           "type": "text",
           "text": "｜《かんじ》"
         }
-      ],
-      "html": "｜《かんじ》"
+      ]
     },
     {
       "name": "empty base brace",
@@ -233,8 +215,7 @@
           "type": "text",
           "text": "{|かんじ}"
         }
-      ],
-      "html": "{|かんじ}"
+      ]
     },
     {
       "name": "escape bracket",
@@ -244,8 +225,7 @@
           "type": "text",
           "text": "漢字《かんじ》"
         }
-      ],
-      "html": "漢字《かんじ》"
+      ]
     },
     {
       "name": "escape braces",
@@ -255,8 +235,7 @@
           "type": "text",
           "text": "{漢字|かんじ}"
         }
-      ],
-      "html": "{漢字|かんじ}"
+      ]
     },
     {
       "name": "double backslash",
@@ -266,8 +245,7 @@
           "type": "text",
           "text": "\\"
         }
-      ],
-      "html": "\\"
+      ]
     },
     {
       "name": "newline blocks ruby",
@@ -277,8 +255,7 @@
           "type": "text",
           "text": "漢字\n《かんじ》"
         }
-      ],
-      "html": "漢字<br>《かんじ》"
+      ]
     },
     {
       "name": "ruby newline ruby",
@@ -298,8 +275,7 @@
           "base": "夜",
           "reading": "よる"
         }
-      ],
-      "html": "<ruby>朝<rt>あさ</rt></ruby><br><ruby>夜<rt>よる</rt></ruby>"
+      ]
     },
     {
       "name": "crlf",
@@ -309,8 +285,7 @@
           "type": "text",
           "text": "A\r\nB"
         }
-      ],
-      "html": "A<br>B"
+      ]
     },
     {
       "name": "html in reading",
@@ -321,8 +296,7 @@
           "base": "漢",
           "reading": "<b>"
         }
-      ],
-      "html": "<ruby>漢<rt>&lt;b&gt;</rt></ruby>"
+      ]
     },
     {
       "name": "html in text",
@@ -332,8 +306,7 @@
           "type": "text",
           "text": "a<b>&c"
         }
-      ],
-      "html": "a&lt;b&gt;&amp;c"
+      ]
     },
     {
       "name": "iteration mark",
@@ -344,8 +317,7 @@
           "base": "人々",
           "reading": "ひとびと"
         }
-      ],
-      "html": "<ruby>人々<rt>ひとびと</rt></ruby>"
+      ]
     },
     {
       "name": "small ke",
@@ -356,8 +328,7 @@
           "base": "一ヶ",
           "reading": "いっか"
         }
-      ],
-      "html": "<ruby>一ヶ<rt>いっか</rt></ruby>"
+      ]
     },
     {
       "name": "latin around ruby",
@@ -376,8 +347,7 @@
           "type": "text",
           "text": " world"
         }
-      ],
-      "html": "Hello <ruby>漢字<rt>かんじ</rt></ruby> world"
+      ]
     },
     {
       "name": "pipe at newline",
@@ -387,8 +357,7 @@
           "type": "text",
           "text": "｜\n次"
         }
-      ],
-      "html": "｜<br>次"
+      ]
     },
     {
       "name": "brace contains aozora-looking text",
@@ -399,8 +368,7 @@
           "base": "漢《かん》字",
           "reading": "よみ"
         }
-      ],
-      "html": "<ruby>漢《かん》字<rt>よみ</rt></ruby>"
+      ]
     },
     {
       "name": "spaces in reading",
@@ -411,8 +379,7 @@
           "base": "漢字",
           "reading": "かん じ"
         }
-      ],
-      "html": "<ruby>漢字<rt>かん じ</rt></ruby>"
+      ]
     },
     {
       "name": "halfwidth katakana",
@@ -422,8 +389,7 @@
           "type": "text",
           "text": "ｶﾀｶﾅです"
         }
-      ],
-      "html": "ｶﾀｶﾅです"
+      ]
     },
     {
       "name": "brackets alone",
@@ -433,8 +399,7 @@
           "type": "text",
           "text": "《》"
         }
-      ],
-      "html": "《》"
+      ]
     },
     {
       "name": "adjacent rubies",
@@ -450,8 +415,7 @@
           "base": "文字",
           "reading": "もじ"
         }
-      ],
-      "html": "<ruby>漢字<rt>かんじ</rt></ruby><ruby>文字<rt>もじ</rt></ruby>"
+      ]
     },
     {
       "name": "escaped pipe then implicit",
@@ -466,8 +430,7 @@
           "base": "今日",
           "reading": "きょう"
         }
-      ],
-      "html": "|<ruby>今日<rt>きょう</rt></ruby>"
+      ]
     },
     {
       "name": "ampersand in explicit base",
@@ -478,8 +441,7 @@
           "base": "A&B",
           "reading": "ab"
         }
-      ],
-      "html": "<ruby>A&amp;B<rt>ab</rt></ruby>"
+      ]
     },
     {
       "name": "brace reading contains pipe",
@@ -490,8 +452,7 @@
           "base": "a",
           "reading": "b|c"
         }
-      ],
-      "html": "<ruby>a<rt>b|c</rt></ruby>"
+      ]
     },
     {
       "name": "fullwidth braces are literal",
@@ -501,8 +462,7 @@
           "type": "text",
           "text": "｛漢字｝"
         }
-      ],
-      "html": "｛漢字｝"
+      ]
     },
     {
       "name": "kanji then brace",
@@ -517,8 +477,7 @@
           "base": "漢",
           "reading": "かん"
         }
-      ],
-      "html": "字<ruby>漢<rt>かん</rt></ruby>"
+      ]
     },
     {
       "name": "quotes",
@@ -528,8 +487,7 @@
           "type": "text",
           "text": "Say \"hi\""
         }
-      ],
-      "html": "Say &quot;hi&quot;"
+      ]
     },
     {
       "name": "apostrophe",
@@ -539,8 +497,7 @@
           "type": "text",
           "text": "it's"
         }
-      ],
-      "html": "it&#39;s"
+      ]
     },
     {
       "name": "newline inside reading",
@@ -550,8 +507,7 @@
           "type": "text",
           "text": "漢字《かん\nじ》"
         }
-      ],
-      "html": "漢字《かん<br>じ》"
+      ]
     },
     {
       "name": "pipe and implicit together",
@@ -575,8 +531,7 @@
           "type": "text",
           "text": "み物"
         }
-      ],
-      "html": "<ruby>食べ<rt>た</rt></ruby>ものと<ruby>飲<rt>の</rt></ruby>み物"
+      ]
     },
     {
       "name": "empty reading between text",
@@ -591,8 +546,7 @@
           "type": "text",
           "text": "後"
         }
-      ],
-      "html": "<ruby>前<rt></rt></ruby>後"
+      ]
     },
     {
       "name": "tab",
@@ -602,8 +556,7 @@
           "type": "text",
           "text": "A\tB"
         }
-      ],
-      "html": "A\tB"
+      ]
     },
     {
       "name": "lone cr",
@@ -613,8 +566,7 @@
           "type": "text",
           "text": "A\rB"
         }
-      ],
-      "html": "A<br>B"
+      ]
     },
     {
       "name": "trailing backslash",
@@ -624,8 +576,7 @@
           "type": "text",
           "text": "abc\\"
         }
-      ],
-      "html": "abc\\"
+      ]
     },
     {
       "name": "escaped close in reading",
@@ -636,8 +587,7 @@
           "base": "漢字",
           "reading": "か》ん"
         }
-      ],
-      "html": "<ruby>漢字<rt>か》ん</rt></ruby>"
+      ]
     },
     {
       "name": "spaces in explicit base",
@@ -648,8 +598,7 @@
           "base": "食べ る",
           "reading": "たべる"
         }
-      ],
-      "html": "<ruby>食べ る<rt>たべる</rt></ruby>"
+      ]
     },
     {
       "name": "emoji around ruby",
@@ -668,8 +617,7 @@
           "type": "text",
           "text": "☆"
         }
-      ],
-      "html": "★<ruby>漢字<rt>かんじ</rt></ruby>☆"
+      ]
     },
     {
       "name": "fullwidth pipe is not a brace separator",
@@ -679,8 +627,7 @@
           "type": "text",
           "text": "{漢字｜かんじ}"
         }
-      ],
-      "html": "{漢字｜かんじ}"
+      ]
     },
     {
       "name": "gt escape",
@@ -690,8 +637,7 @@
           "type": "text",
           "text": "a>b"
         }
-      ],
-      "html": "a&gt;b"
+      ]
     },
     {
       "name": "extension b kanji",
@@ -702,8 +648,7 @@
           "base": "𠀋",
           "reading": "あ"
         }
-      ],
-      "html": "<ruby>𠀋<rt>あ</rt></ruby>"
+      ]
     },
     {
       "name": "shime mark",
@@ -714,8 +659,7 @@
           "base": "〆",
           "reading": "しめ"
         }
-      ],
-      "html": "<ruby>〆<rt>しめ</rt></ruby>"
+      ]
     },
     {
       "name": "small ka",
@@ -730,8 +674,7 @@
           "type": "text",
           "text": "月"
         }
-      ],
-      "html": "<ruby>ヵ<rt>か</rt></ruby>月"
+      ]
     },
     {
       "name": "escaped pipe inside explicit base",
@@ -742,8 +685,7 @@
           "base": "本｜物",
           "reading": "ほんもの"
         }
-      ],
-      "html": "<ruby>本｜物<rt>ほんもの</rt></ruby>"
+      ]
     },
     {
       "name": "unmatched brace then real ruby",
@@ -758,8 +700,7 @@
           "base": "漢字",
           "reading": "かんじ"
         }
-      ],
-      "html": "{nope<ruby>漢字<rt>かんじ</rt></ruby>"
+      ]
     },
     {
       "name": "script injection",
@@ -774,8 +715,7 @@
           "type": "text",
           "text": "&"
         }
-      ],
-      "html": "<ruby>漢<rt>&lt;script&gt;</rt></ruby>&amp;"
+      ]
     },
     {
       "name": "okurigana blocks implicit ruby",
@@ -785,8 +725,7 @@
           "type": "text",
           "text": "晴れ《はれ》"
         }
-      ],
-      "html": "晴れ《はれ》"
+      ]
     }
   ]
 }

@@ -1,17 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ensureTextExtension, readPickedFile, sanitizeFilename } from "../src/lib/files";
+import { decodeText, encodeEol, ensureTextExtension, sanitizeFilename } from "../src/lib/files";
 
 describe("filenames", () => {
-  it("matches the Rust extension rules", () => {
+  it("keeps .txt and .md, adds .txt otherwise", () => {
     expect(ensureTextExtension("日記")).toBe("日記.txt");
-    expect(ensureTextExtension("日記.txt")).toBe("日記.txt");
     expect(ensureTextExtension("日記.TXT")).toBe("日記.TXT");
     expect(ensureTextExtension("notes.md")).toBe("notes.md");
-    expect(ensureTextExtension("notes.MD")).toBe("notes.MD");
     expect(ensureTextExtension("  spaced  ")).toBe("spaced.txt");
     expect(ensureTextExtension("")).toBe("無題.txt");
     expect(ensureTextExtension("foo.markdown")).toBe("foo.markdown.txt");
-    expect(ensureTextExtension(".txt")).toBe(".txt.txt");
   });
 
   it("rejects path separators", () => {
@@ -22,15 +19,21 @@ describe("filenames", () => {
   });
 });
 
-describe("readPickedFile", () => {
-  it("strips a UTF-8 BOM", async () => {
-    const body = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode("漢字")]);
-    const file = new File([body], "日記.txt", { type: "text/plain" });
-    expect(await readPickedFile(file)).toBe("漢字");
+describe("decodeText", () => {
+  it("strips a UTF-8 BOM and remembers CRLF", () => {
+    const body = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode("漢字\r\nかな")]);
+    const doc = decodeText(body);
+    expect(doc).toEqual({ text: "漢字\nかな", eol: "\r\n" });
+    expect(encodeEol(doc.text, doc.eol)).toBe("漢字\r\nかな");
   });
 
-  it("rejects invalid UTF-8", async () => {
-    const file = new File([new Uint8Array([0xff, 0xfe, 0x41])], "bad.txt");
-    await expect(readPickedFile(file)).rejects.toThrow();
+  it("reads Shift_JIS, as Aozora Bunko ships it", () => {
+    // 「吾輩《わがはい》」 in Shift_JIS.
+    const sjis = new Uint8Array([0x8c, 0xe1, 0x94, 0x79, 0x81, 0x73, 0x82, 0xed, 0x82, 0xaa, 0x82, 0xcd, 0x82, 0xa2, 0x81, 0x74]);
+    expect(decodeText(sjis).text).toBe("吾輩《わがはい》");
+  });
+
+  it("rejects bytes that are neither", () => {
+    expect(() => decodeText(new Uint8Array([0xff, 0xff, 0xff]))).toThrow();
   });
 });

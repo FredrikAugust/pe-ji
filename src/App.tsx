@@ -1,14 +1,42 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import {
+  countChars,
   countLines,
   cycleFuri,
   formatTitle,
   furiLabel,
   isDirty,
   nextFontSize,
+  FURI_MODES,
   type FuriMode,
 } from "./lib/document";
-import { basename, downloadText, isTauri, readPickedFile, sanitizeFilename } from "./lib/files";
+import { insertTable, replace, setBlock, type Block } from "./lib/edit";
+import {
+  firstEnabledIndex,
+  menuCommand,
+  popupContextMenu,
+  setNativeMenu,
+  withRecent,
+  type MenuId,
+  type MenuItem,
+} from "./lib/menus";
+import {
+  basename,
+  decodeText,
+  downloadText,
+  encodeEol,
+  isTauri,
+  sanitizeFilename,
+  type Decoded,
+} from "./lib/files";
 import {
   IME_SUPPRESS_MS,
   KEYMAP,
@@ -23,14 +51,42 @@ import {
   type Overlay,
   type Platform,
 } from "./lib/keymap";
-import { MENUS, firstEnabledIndex, menuCommand, type MenuId } from "./lib/menus";
-import { applyReading, visibleCharCount } from "./lib/pageEdit";
-import { nextRuby, prevRuby, rubySpans } from "./lib/rubyEdit";
+import type { Kind } from "./lib/parser";
 import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
+import { Dict } from "./ui/Dict";
+import { Translate } from "./ui/Translate";
+import { PdfView } from "./ui/PdfView";
+import { Notes } from "./ui/Notes";
+import { Cap, Splitter, usePaneWidth } from "./ui/Pane";
+import { Welcome } from "./ui/Welcome";
+import { place, type Note } from "./lib/notes";
+import { connectRelay, type RelayStatus } from "./lib/relay";
 import { Page, type PageHandle } from "./ui/Page";
 
 const HIT_KEY = "pico-sakubun-hits";
 const HIT_SESSION = "pico-sakubun-hit-session";
+const FURI_KEY = "pico.furigana";
+const AI_KEY = "pico.ai";
+const PDF_WIDTH_KEY = "pico.pdfWidth";
+const SIDE_WIDTH_KEY = "pico.sideWidth";
+const RELAY_KEY = "pico.relay";
+const RELAY_LABEL: Record<RelayStatus, string> = {
+  connecting: "接続中…",
+  online: "接続しています",
+  offline: "つながりません（再試行中）",
+  replaced: "別のパソコンが使っています",
+};
+const RECENT_KEY = "pico.recent";
+/** The last untitled page, so it survives a crash or a quit. */
+const DRAFT_KEY = "pico.draft";
+
+function readDraft(): string {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export function App() {
   const platform: Platform =
@@ -38,35 +94,94 @@ export function App() {
       ? "other"
       : detectPlatform(navigator.platform, navigator.userAgent);
 
-  const [text, setText] = useState(SAMPLE);
-  const [saved, setSaved] = useState(SAMPLE);
-  const [filename, setFilename] = useState(SAMPLE_NAME);
+  // The app starts on the welcome screen with an empty, unnamed document behind it.
+  const [welcome, setWelcome] = useState(true);
+  const [text, setText] = useState("");
+  const [doc, setDoc] = useState({ text: "" });
+  const [saved, setSaved] = useState("");
+  const [filename, setFilename] = useState(UNTITLED_NAME);
   const [path, setPath] = useState<string | null>(null);
-  const [furi, setFuri] = useState<FuriMode>("show");
+  const [furi, setFuri] = useState<FuriMode>(() => {
+    try {
+      return (FURI_MODES as readonly string[]).includes(localStorage.getItem(FURI_KEY) ?? "")
+        ? (localStorage.getItem(FURI_KEY) as FuriMode)
+        : "show";
+    } catch {
+      return "show";
+    }
+  });
+  const [recent, setRecent] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const menus = useMemo(() => withRecent(recent), [recent]);
+  const menusRef = useRef(menus);
+  menusRef.current = menus;
   const [fontSize, setFontSize] = useState(18);
   const [overlay, setOverlay] = useState<Overlay>("none");
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [status, setStatus] = useState("");
-  const [rubyBase, setRubyBase] = useState("");
   const [saveAsDraft, setSaveAsDraft] = useState("");
   const [imeOn, setImeOn] = useState(false);
   const [hits, setHits] = useState("00013842");
+  const [eol, setEol] = useState<Decoded["eol"]>("\n");
+  const [kind, setKind] = useState<Kind>("p");
+  const [dictOpen, setDictOpen] = useState(true);
+  const [dictSeed, setDictSeed] = useState<{ q: string; n: number } | null>(
+    null,
+  );
 
   const textRef = useRef(text);
   const savedRef = useRef(saved);
   const filenameRef = useRef(filename);
   const pathRef = useRef(path);
+  const eolRef = useRef(eol);
   const overlayRef = useRef(overlay);
   const openMenuRef = useRef(openMenu);
   const menuIndexRef = useRef(menuIndex);
   const composingRef = useRef(false);
   const suppressUntilRef = useRef(0);
   const pendingRef = useRef<(() => void) | null>(null);
-  const rubySelRef = useRef<{ start: number; end: number; base: string } | null>(null);
   const pageRef = useRef<PageHandle>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const rubyInputRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const [trOpen, setTrOpen] = useState(false);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [ai, setAi] = useState<{ url: string; token: string } | null>(null);
+  const [relay, setRelay] = useState<{ url: string; key: string } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(RELAY_KEY) ?? "null") as { url: string; key: string } | null;
+    } catch {
+      return null;
+    }
+  });
+  const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
+  const [relayEpoch, setRelayEpoch] = useState(0);
+  const relayFormRef = useRef<HTMLFormElement>(null);
+  const [trSeed, setTrSeed] = useState<{ q: string; n: number } | null>(null);
+  const [pdf, setPdf] = useState<{ bytes: ArrayBuffer; name: string } | null>(null);
+
+  const showPdf = useCallback((bytes: ArrayBuffer, name: string) => setPdf({ bytes, name }), []);
+
+  const openPdf = useCallback(async () => {
+    if (!isTauri()) {
+      pdfRef.current?.click();
+      return;
+    }
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const path = await open({ multiple: false, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (typeof path !== "string") return;
+    const { invoke } = await import("@tauri-apps/api/core");
+    showPdf(await invoke<ArrayBuffer>("read_document", { path }), basename(path));
+  }, [showPdf]);
+
+  const [pdfWidth, resizePdf, savePdfWidth] = usePaneWidth(PDF_WIDTH_KEY, 480);
+  const [sideWidth, resizeSide, saveSideWidth] = usePaneWidth(SIDE_WIDTH_KEY, 300);
   const saveAsInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(cmd: CommandId) => void>(() => {});
@@ -76,12 +191,17 @@ export function App() {
   savedRef.current = saved;
   filenameRef.current = filename;
   pathRef.current = path;
+  eolRef.current = eol;
   overlayRef.current = overlay;
   openMenuRef.current = openMenu;
   menuIndexRef.current = menuIndex;
 
   const dirty = isDirty(text, saved);
-  const title = formatTitle(filename, dirty);
+  const title = welcome ? "pe-ji" : formatTitle(filename, dirty);
+  // The page mounts when the welcome screen goes away; put the caret in it.
+  useEffect(() => {
+    if (!welcome) pageRef.current?.focus();
+  }, [welcome]);
 
   const flash = useCallback((message: string) => {
     setStatus(message);
@@ -90,13 +210,16 @@ export function App() {
   }, []);
 
   const loadDoc = useCallback(
-    (next: string, name: string, nextPath: string | null, message: string) => {
-      setText(next);
-      setSaved(next);
+    (doc: Decoded, name: string, nextPath: string | null, message: string) => {
+      setDoc({ text: doc.text });
+      setText(doc.text);
+      setSaved(doc.text);
+      setEol(doc.eol);
       setFilename(name);
       setPath(nextPath);
       setOverlay("none");
       setOpenMenu(null);
+      setWelcome(false);
       flash(message);
       queueMicrotask(() => pageRef.current?.focus());
     },
@@ -105,22 +228,42 @@ export function App() {
 
   const saveBrowser = useCallback(
     (name: string) => {
-      downloadText(name, textRef.current);
+      const body = textRef.current;
+      downloadText(name, encodeEol(body, eolRef.current));
       setFilename(name);
-      setSaved(textRef.current);
+      setSaved(body);
       flash("保存しました");
     },
     [flash],
   );
 
   const tauriWrite = useCallback(
-    async (target: string) => {
+    async (target: string, quiet = false) => {
+      // Read once: typing during the write must stay dirty.
+      const body = textRef.current;
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("write_document", { path: target, contents: textRef.current });
+      await invoke("write_document", {
+        path: target,
+        contents: encodeEol(body, eolRef.current),
+      });
+      if (!pathRef.current) {
+        // The untitled page now lives in a file; its draft is no longer needed.
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      }
       setPath(target);
       setFilename(basename(target));
-      setSaved(textRef.current);
-      flash("保存しました");
+      setSaved(body);
+      if (!quiet) flash("保存しました");
+    },
+    [flash],
+  );
+
+  const failSave = useCallback(
+    (err: unknown) => {
+      flash(`保存できませんでした：${String(err)}`);
+      return false;
     },
     [flash],
   );
@@ -135,11 +278,10 @@ export function App() {
     try {
       await tauriWrite(picked);
       return true;
-    } catch {
-      flash("保存できませんでした");
-      return false;
+    } catch (err) {
+      return failSave(err);
     }
-  }, [flash, tauriWrite]);
+  }, [failSave, tauriWrite]);
 
   const save = useCallback(async (): Promise<boolean> => {
     if (isTauri()) {
@@ -147,14 +289,13 @@ export function App() {
       try {
         await tauriWrite(pathRef.current);
         return true;
-      } catch {
-        flash("保存できませんでした");
-        return false;
+      } catch (err) {
+        return failSave(err);
       }
     }
     saveBrowser(filenameRef.current);
     return true;
-  }, [flash, saveBrowser, tauriSaveAs, tauriWrite]);
+  }, [failSave, saveBrowser, tauriSaveAs, tauriWrite]);
 
   const beginSaveAs = useCallback(() => {
     if (isTauri()) {
@@ -176,26 +317,78 @@ export function App() {
     setOverlay("none");
   }, [flash, saveAsDraft, saveBrowser]);
 
+  // Autosave a second after typing stops: a file on disk is written in place, an untitled page is kept as a draft.
+  useEffect(() => {
+    if (welcome || !dirty) return;
+    const t = setTimeout(() => {
+      if (path) {
+        if (isTauri()) tauriWrite(path, true).catch(failSave);
+      } else if (text) {
+        try {
+          localStorage.setItem(DRAFT_KEY, text);
+        } catch {}
+      }
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [welcome, dirty, path, text, tauriWrite, failSave]);
+
+  const updateRecent = useCallback((change: (list: string[]) => string[]) => {
+    setRecent((list) => {
+      const next = change(list);
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      } catch {
+        // Recent files are a convenience; the list just won't survive a restart.
+      }
+      return next;
+    });
+  }, []);
+  const remember = useCallback((path: string) => updateRecent((list) => [path, ...list.filter((p) => p !== path)].slice(0, 10)), [updateRecent]);
+  // Drop files that were deleted or moved, each time the welcome screen shows (and after a failed open).
+  const pruneRecent = useCallback(async () => {
+    if (!isTauri()) return;
+    const { invoke } = await import("@tauri-apps/api/core");
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+    const alive = new Set(await invoke<string[]>("existing_paths", { paths: list }));
+    updateRecent((current) => current.filter((p) => alive.has(p) || !list.includes(p)));
+  }, [updateRecent]);
+  useEffect(() => {
+    if (welcome) pruneRecent().catch(() => {});
+  }, [welcome, pruneRecent]);
+
+  const openPath = useCallback(
+    async (path: string) => {
+      let bytes: ArrayBuffer;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        bytes = await invoke<ArrayBuffer>("read_document", { path });
+      } catch (err) {
+        flash(`開けませんでした：${String(err)}`);
+        pruneRecent().catch(() => {});
+        return;
+      }
+      try {
+        loadDoc(decodeText(new Uint8Array(bytes)), basename(path), path, "開きました");
+        remember(path);
+      } catch {
+        flash("UTF-8 でも Shift_JIS でもありません");
+      }
+    },
+    [flash, loadDoc, remember, pruneRecent],
+  );
+
   const doOpen = useCallback(async () => {
     if (isTauri()) {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const { invoke } = await import("@tauri-apps/api/core");
       const picked = await open({
         multiple: false,
         filters: [{ name: "作文", extensions: ["txt", "md"] }],
       });
-      if (typeof picked !== "string") return;
-      try {
-        const body = await invoke<string>("read_document", { path: picked });
-        loadDoc(body, basename(picked), picked, "開きました");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        flash(msg.includes("UTF-8") ? "このファイルは UTF-8 ではありません" : "ファイルを開けませんでした");
-      }
+      if (typeof picked === "string") await openPath(picked);
       return;
     }
     fileRef.current?.click();
-  }, [flash, loadDoc]);
+  }, [openPath]);
 
   const destroyWindow = useCallback(async () => {
     if (!isTauri()) {
@@ -216,52 +409,9 @@ export function App() {
     setOverlay("confirm");
   }, []);
 
-  const startRuby = useCallback(() => {
-    const sel = pageRef.current?.selection();
-    if (!sel || sel.start === sel.end || !sel.base) {
-      flash("文字列を選択してください");
-      return;
-    }
-    if (sel.base.includes("\n") || sel.base.includes("\r")) {
-      flash("ルビは1行にしてください");
-      return;
-    }
-    rubySelRef.current = sel;
-    setRubyBase(sel.base);
-    setOpenMenu(null);
-    setOverlay("ruby");
-  }, [flash]);
-
-  const commitRuby = useCallback(() => {
-    const sel = rubySelRef.current;
-    if (!sel) return;
-    const reading = rubyInputRef.current?.value ?? "";
-    const result = applyReading(textRef.current, sel.start, sel.end, sel.base, reading);
-    if (!result.ok) {
-      flash(result.reason === "empty-reading" ? "読みを入力してください" : "ルビを挿入できません");
-      return;
-    }
-    pageRef.current?.queueSelection(result.cursor, result.cursor);
-    setText(result.text);
-    setOverlay("none");
-    rubySelRef.current = null;
-    flash("ルビを挿入しました");
-  }, [flash]);
-
-  const jumpRuby = useCallback(
-    (dir: 1 | -1) => {
-      const sel = pageRef.current?.selection();
-      const pos = sel?.start ?? 0;
-      const span = dir > 0 ? nextRuby(textRef.current, pos) : prevRuby(textRef.current, pos);
-      if (!span) {
-        flash(dir > 0 ? "次のルビはありません" : "前のルビはありません");
-        return;
-      }
-      const index = rubySpans(textRef.current).findIndex((item) => item.start === span.start && item.end === span.end);
-      pageRef.current?.selectRuby(index);
-      flash("ルビを選択しました");
-    },
-    [flash],
+  const block = useCallback(
+    (k: Block) => pageRef.current?.edit((t, s2, e) => setBlock(t, s2, e, k)),
+    [],
   );
 
   const run = useCallback(
@@ -271,7 +421,7 @@ export function App() {
         setOpenMenu((cur) => {
           const next = cur === id ? null : id;
           if (next) {
-            const menu = MENUS.find((item) => item.id === next);
+            const menu = menusRef.current.find((item) => item.id === next);
             if (menu) setMenuIndex(Math.max(0, firstEnabledIndex(menu)));
           }
           return next;
@@ -281,7 +431,14 @@ export function App() {
       setOpenMenu(null);
       switch (cmd) {
         case "file.new":
-          guard(() => loadDoc("", UNTITLED_NAME, null, "新しい作文を開きました"));
+          guard(() =>
+            loadDoc(
+              { text: "", eol: "\n" },
+              UNTITLED_NAME,
+              null,
+              "新しい作文を開きました",
+            ),
+          );
           break;
         case "file.open":
           guard(() => {
@@ -295,25 +452,102 @@ export function App() {
           beginSaveAs();
           break;
         case "file.sample":
-          guard(() => loadDoc(SAMPLE, SAMPLE_NAME, null, "サンプルを開きました"));
+          guard(() =>
+            loadDoc(
+              { text: SAMPLE, eol: "\n" },
+              SAMPLE_NAME,
+              null,
+              "サンプルを開きました",
+            ),
+          );
+          break;
+        case "file.pdf":
+          window.print();
           break;
         case "file.close":
           guard(() => {
             void destroyWindow();
           });
           break;
-        case "edit.ruby":
-          startRuby();
-          break;
-        case "edit.rubyNext":
-          jumpRuby(1);
-          break;
-        case "edit.rubyPrev":
-          jumpRuby(-1);
-          break;
         case "edit.selectAll":
           pageRef.current?.selectAll();
           break;
+        case "edit.undo":
+          pageRef.current?.undo(-1);
+          break;
+        case "edit.redo":
+          pageRef.current?.undo(1);
+          break;
+        case "format.bold":
+          pageRef.current?.format("bold");
+          break;
+        case "format.italic":
+          pageRef.current?.format("italic");
+          break;
+        case "format.h1":
+        case "format.h2":
+        case "format.h3":
+          block(cmd.slice("format.".length) as Block);
+          break;
+        case "format.body":
+          block("p");
+          break;
+        case "format.bullet":
+          block("li");
+          break;
+        case "format.indent":
+          pageRef.current?.tab(1);
+          break;
+        case "format.outdent":
+          pageRef.current?.tab(-1);
+          break;
+        case "insert.table":
+          pageRef.current?.edit((t, start) => insertTable(t, start));
+          break;
+        case "view.pdf":
+          if (pdf) setPdf(null);
+          else void openPdf();
+          break;
+        case "dict.toggle":
+          setDictOpen((open) => !open);
+          break;
+        case "dict.lookup": {
+          const base = pageRef.current?.selection()?.base.trim() ?? "";
+          setDictOpen(true);
+          setDictSeed((prev) => ({ q: base, n: (prev?.n ?? 0) + 1 }));
+          break;
+        }
+        case "notes.toggle":
+          setNotesOpen((open) => !open);
+          break;
+        case "ai.connect":
+          if (!isTauri()) {
+            flash("AI 接続はデスクトップ版だけです");
+            break;
+          }
+          void import("@tauri-apps/api/core")
+            .then(({ invoke }) => invoke<{ url: string; token: string }>("mcp_start"))
+            .then((info) => {
+              setAi(info);
+              setOverlay("ai");
+              try {
+                localStorage.setItem(AI_KEY, "1");
+              } catch {
+                // Auto-connect next time is a convenience only.
+              }
+            })
+            .catch((err) => flash(`AI 接続を開始できませんでした：${String(err)}`));
+          break;
+        case "translate.toggle":
+          setTrOpen((open) => !open);
+          break;
+        case "translate.selection": {
+          // Nothing selected: the pane opens with its box focused, nothing is translated.
+          const q = pageRef.current?.selection()?.base.trim() ?? "";
+          setTrOpen(true);
+          setTrSeed((prev) => ({ q, n: (prev?.n ?? 0) + 1 }));
+          break;
+        }
         case "view.furigana":
           setFuri((mode) => cycleFuri(mode));
           break;
@@ -336,19 +570,20 @@ export function App() {
           setFontSize(nextFontSize(18, 0));
           break;
         case "help.cheatsheet":
-          setOverlay((current) => (current === "cheatsheet" ? "none" : "cheatsheet"));
+          setOverlay((current) =>
+            current === "cheatsheet" ? "none" : "cheatsheet",
+          );
           break;
         case "help.about":
           setOverlay("about");
           break;
         case "dialog.cancel":
           pendingRef.current = null;
-          rubySelRef.current = null;
           setOverlay("none");
           break;
         case "dialog.confirm":
-          if (overlayRef.current === "ruby") commitRuby();
-          else if (overlayRef.current === "saveas") commitSaveAs();
+          if (overlayRef.current === "saveas") commitSaveAs();
+          else if (overlayRef.current === "ai") relayFormRef.current?.requestSubmit();
           else if (overlayRef.current === "confirm") {
             void (async () => {
               const ok = await save();
@@ -358,7 +593,10 @@ export function App() {
               setOverlay("none");
               action?.();
             })();
-          } else if (overlayRef.current === "about" || overlayRef.current === "cheatsheet") {
+          } else if (
+            overlayRef.current === "about" ||
+            overlayRef.current === "cheatsheet"
+          ) {
             setOverlay("none");
           }
           break;
@@ -366,22 +604,251 @@ export function App() {
           break;
       }
     },
-    [beginSaveAs, commitRuby, commitSaveAs, destroyWindow, doOpen, guard, jumpRuby, loadDoc, save, startRuby],
+    [
+      beginSaveAs,
+      block,
+      commitSaveAs,
+      destroyWindow,
+      doOpen,
+      guard,
+      loadDoc,
+      openPdf,
+      pdf,
+      save,
+    ],
   );
   runRef.current = run;
+
+  /** A file dropped on the window: a PDF opens beside the page, .txt/.md opens for editing. */
+  const dropped = useRef<(name: string, read: () => Promise<ArrayBuffer>, path?: string, file?: File) => void>(() => {});
+  dropped.current = (name, read, path, file) => {
+    if (/\.pdf$/i.test(name)) void read().then((b) => showPdf(b, basename(name)));
+    else if (!/\.(txt|md)$/i.test(name)) flash("開けるのは .txt・.md・.pdf です");
+    else if (path) guard(() => void openPath(path));
+    else if (file) guard(() => void openFile(file));
+  };
+
+  useEffect(() => {
+    if (isTauri()) {
+      let stop: (() => void) | null = null;
+      let done = false;
+      void Promise.all([import("@tauri-apps/api/webview"), import("@tauri-apps/api/core")]).then(([{ getCurrentWebview }, { invoke }]) =>
+        getCurrentWebview()
+          .onDragDropEvent((e) => {
+            if (e.payload.type !== "drop") return;
+            const path = e.payload.paths[0];
+            if (path) dropped.current(path, () => invoke<ArrayBuffer>("read_document", { path }), path);
+          })
+          .then((un) => (done ? un() : (stop = un))),
+      );
+      return () => {
+        done = true;
+        stop?.();
+      };
+    }
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => {
+      const file = e.dataTransfer?.files[0];
+      if (!file) return;
+      e.preventDefault();
+      dropped.current(file.name, () => file.arrayBuffer(), undefined, file);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
+
+  const pick = useCallback(
+    (item: MenuItem) => {
+      const path = item.path;
+      if (path) {
+        setOpenMenu(null);
+        guard(() => void openPath(path));
+      } else if (item.command) run(item.command);
+    },
+    [guard, openPath, run],
+  );
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
+
+  useEffect(() => {
+    if (isTauri()) void setNativeMenu(menus, (item) => pickRef.current(item));
+  }, [menus]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FURI_KEY, furi);
+    } catch {
+      // Remembering the mode is a convenience only.
+    }
+  }, [furi]);
+
+  // --- AI (MCP): Rust serves reads from a snapshot and sends writes here as events.
+  const applyNoteEdit = useCallback((quote: string, find: (t: string) => number, replacement: string) => {
+    pageRef.current?.edit((t) => {
+      const i = find(t);
+      return i < 0 ? null : replace(t, i, i + quote.length, replacement);
+    });
+  }, []);
+
+  const onMcp = useCallback(
+    (event: string, p: Record<string, unknown>) => {
+      // Rust found the quote: `source` is the matched source text, `at` its offset a moment ago.
+      const source = String(p.source);
+      const near = (t: string) => place(t, { quote: source, at: Number(p.at) });
+      if (event === "mcp-note") {
+        const at = near(textRef.current);
+        if (at < 0) return;
+        const note: Note = {
+          id: String(p.id),
+          kind: p.kind === "correction" ? "correction" : "note",
+          quote: source,
+          label: String(p.quote),
+          comment: String(p.comment),
+          suggestion: typeof p.suggestion === "string" ? p.suggestion : null,
+          at,
+        };
+        setNotes((list) => [...list, note]);
+        setNotesOpen(true);
+      } else if (event === "mcp-remove-note") {
+        setNotes((list) => list.filter((n) => n.id !== p.id));
+      } else if (event === "mcp-replace") {
+        applyNoteEdit(source, near, String(p.replacement));
+      }
+    },
+    [applyNoteEdit],
+  );
+
+  useEffect(() => {
+    (window as unknown as { __picoMcp: typeof onMcp }).__picoMcp = onMcp;
+    if (!isTauri()) return;
+    let done = false;
+    const stops: (() => void)[] = [];
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      for (const name of ["mcp-note", "mcp-remove-note", "mcp-replace"])
+        void listen<Record<string, unknown>>(name, (e) => onMcp(name, e.payload)).then((stop) =>
+          done ? stop() : stops.push(stop),
+        );
+    });
+    return () => {
+      done = true;
+      stops.forEach((stop) => stop());
+    };
+  }, [onMcp]);
+
+  useEffect(() => {
+    try {
+      if (isTauri() && localStorage.getItem(AI_KEY) === "1")
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke<{ url: string; token: string }>("mcp_start").then(setAi, () => {}),
+        );
+    } catch {
+      // No storage: the user connects from the menu.
+    }
+  }, []);
+
+  // The cloud relay: the page holds the socket, Rust answers each message.
+  useEffect(() => {
+    if (!ai || !relay || !isTauri()) return;
+    return connectRelay(
+      relay.url,
+      relay.key,
+      async (msg) => (await import("@tauri-apps/api/core")).invoke("mcp_handle", { msg }),
+      setRelayStatus,
+    );
+  }, [ai, relay, relayEpoch]);
+
+  // Another computer took over; coming back to this window takes it back.
+  useEffect(() => {
+    if (relayStatus !== "replaced") return;
+    flash("別のパソコンが AI 接続を使っています。このウィンドウに戻ると取り戻します。");
+    const back = () => setRelayEpoch((n) => n + 1);
+    window.addEventListener("focus", back);
+    return () => window.removeEventListener("focus", back);
+  }, [relayStatus, flash]);
+
+  // Push the document to Rust a moment after it, the selection or the notes change.
+  useEffect(() => {
+    if (!ai) return;
+    let timer = 0;
+    const push = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke("mcp_sync", {
+            name: filenameRef.current,
+            text: textRef.current,
+            selection: pageRef.current?.selection()?.base ?? "",
+            notes: notes.map(({ at: _, ...n }) => n),
+          }),
+        );
+      }, 300);
+    };
+    push();
+    document.addEventListener("selectionchange", push);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("selectionchange", push);
+    };
+  }, [ai, text, notes]);
+
+  // Highlight noted quotes without touching the page DOM (CSS Custom Highlight API).
+  useEffect(() => {
+    const el = pageRef.current?.element;
+    if (!el || typeof Highlight === "undefined") return;
+    if (!notes.length) {
+      CSS.highlights.delete("pico-note");
+      return;
+    }
+    let frame = 0;
+    const paint = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const spans = notes
+          .map((n) => [place(textRef.current, n), n.quote.length])
+          .filter(([at]) => at >= 0)
+          .map(([at, len]) => [at, at + len] as [number, number]);
+        try {
+          CSS.highlights.set("pico-note", new Highlight(...(pageRef.current?.ranges(spans) ?? [])));
+        } catch {
+          CSS.highlights.delete("pico-note");
+        }
+      });
+    };
+    paint();
+    // Readings arrive later and repaint lines, so follow the DOM, not just the text.
+    const mo = new MutationObserver(paint);
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => {
+      mo.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [notes]);
+
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!isTauri()) return;
+    e.preventDefault();
+    void popupContextMenu((cmd) => runRef.current(cmd));
+  }, []);
 
   const navigateMenu = useCallback((key: string) => {
     const id = openMenuRef.current;
     if (!id) return;
-    const menu = MENUS.find((item) => item.id === id);
+    const menu = menusRef.current.find((item) => item.id === id);
     if (!menu) return;
     const enabled = menu.items
       .map((item, index) => ({ item, index }))
-      .filter((row) => !row.item.separator && !row.item.disabled && row.item.command);
+      .filter(
+        (row) => !row.item.separator && !row.item.disabled && row.item.command,
+      );
     if (key === "ArrowLeft" || key === "ArrowRight") {
-      const idx = MENUS.findIndex((item) => item.id === id);
+      const all = menusRef.current;
+      const idx = all.findIndex((item) => item.id === id);
       const delta = key === "ArrowRight" ? 1 : -1;
-      const next = MENUS[(idx + delta + MENUS.length) % MENUS.length];
+      const next = all[(idx + delta + all.length) % all.length];
       setOpenMenu(next.id);
       setMenuIndex(Math.max(0, firstEnabledIndex(next)));
       return;
@@ -406,7 +873,7 @@ export function App() {
     }
     if (key === "Enter") {
       const item = menu.items[menuIndexRef.current];
-      if (item?.command && !item.disabled) runRef.current(item.command);
+      if (item?.command && !item.disabled) pickRef.current(item);
     }
   }, []);
 
@@ -461,16 +928,17 @@ export function App() {
   useEffect(() => {
     if (!openMenu) return;
     const onPointer = (event: MouseEvent) => {
-      if (!menuBarRef.current?.contains(event.target as Node)) setOpenMenu(null);
+      if (!menuBarRef.current?.contains(event.target as Node))
+        setOpenMenu(null);
     };
     window.addEventListener("mousedown", onPointer);
     return () => window.removeEventListener("mousedown", onPointer);
   }, [openMenu]);
 
   useEffect(() => {
-    if (overlay === "ruby") rubyInputRef.current?.focus();
     if (overlay === "saveas") saveAsInputRef.current?.focus();
-    if (overlay === "cheatsheet") document.getElementById("cheatsheet-title")?.focus();
+    if (overlay === "cheatsheet")
+      document.getElementById("cheatsheet-title")?.focus();
   }, [overlay]);
 
   useEffect(() => {
@@ -486,9 +954,26 @@ export function App() {
     const onKey = (event: KeyboardEvent) => {
       const now = performance.now();
       const target = document.activeElement;
+      // ⌘A / Ctrl+A select the whole field in the Jisho, DeepL and dialog inputs too.
+      if (
+        (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        target.select();
+        return;
+      }
       const ctx: KeyContext = {
         platform,
-        target: pageRef.current?.element && (target === pageRef.current.element || pageRef.current.element.contains(target)) ? "editor" : "other",
+        target:
+          pageRef.current?.element &&
+          (target === pageRef.current.element ||
+            pageRef.current.element.contains(target))
+            ? "editor"
+            : "other",
         overlay: overlayRef.current,
         composing: composingRef.current,
         suppressUntil: suppressUntilRef.current,
@@ -496,13 +981,22 @@ export function App() {
       };
       if (
         imeShouldIgnore(
-          { isComposing: event.isComposing, key: event.key, keyCode: event.keyCode },
+          {
+            isComposing: event.isComposing,
+            key: event.key,
+            keyCode: event.keyCode,
+          },
           { composing: ctx.composing, suppressUntil: ctx.suppressUntil },
           now,
         )
       ) {
         // Keep the IME, but don't let the browser treat Ctrl/Cmd as "save page".
-        const held: KeyContext = { ...ctx, composing: false, suppressUntil: 0, now };
+        const held: KeyContext = {
+          ...ctx,
+          composing: false,
+          suppressUntil: 0,
+          now,
+        };
         const would = matchKey(
           {
             key: event.key,
@@ -526,25 +1020,38 @@ export function App() {
         !event.ctrlKey &&
         !event.altKey &&
         !event.shiftKey &&
-        ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"].includes(event.key)
+        [
+          "ArrowDown",
+          "ArrowUp",
+          "ArrowLeft",
+          "ArrowRight",
+          "Enter",
+          "Home",
+          "End",
+        ].includes(event.key)
       ) {
         event.preventDefault();
         navigateMenu(event.key);
         return;
       }
       const cmd = matchKey(event, ctx);
-      if (!cmd && event.key === "Escape" && openMenuRef.current && overlayRef.current === "none") {
+      if (
+        !cmd &&
+        event.key === "Escape" &&
+        openMenuRef.current &&
+        overlayRef.current === "none"
+      ) {
         event.preventDefault();
         setOpenMenu(null);
         return;
       }
       if (!cmd) {
         if (
-          (ctx.overlay === "ruby" ||
-            ctx.overlay === "saveas" ||
+          (            ctx.overlay === "saveas" ||
             ctx.overlay === "confirm" ||
             ctx.overlay === "cheatsheet" ||
-            ctx.overlay === "about") &&
+            ctx.overlay === "about" ||
+            ctx.overlay === "ai") &&
           (event.ctrlKey || event.metaKey)
         ) {
           event.preventDefault();
@@ -568,425 +1075,584 @@ export function App() {
   async function onPickedFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (file) await openFile(file);
+  }
+
+  async function openFile(file: File) {
     try {
-      const body = await readPickedFile(file);
-      loadDoc(body, file.name, null, "開きました");
+      loadDoc(
+        decodeText(new Uint8Array(await file.arrayBuffer())),
+        file.name,
+        null,
+        "開きました",
+      );
     } catch {
-      flash("このファイルは UTF-8 ではありません");
+      flash("UTF-8 でも Shift_JIS でもありません");
     }
   }
 
-  async function windowButton(action: "min" | "max" | "close") {
-    if (action === "close") {
-      run("file.close");
-      return;
-    }
-    if (!isTauri()) return;
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    const win = getCurrentWindow();
-    if (action === "min") await win.minimize();
-    if (action === "max") await win.toggleMaximize();
-  }
+  const deferred = useDeferredValue(text);
+  const counts = useMemo(
+    () => `${countLines(deferred)}行 / ${countChars(deferred)}字`,
+    [deferred],
+  );
+  const blockValue = kind === "row" ? "p" : kind;
 
   const hint = `♪ ふりがな：${furiLabel(furi)}　／　${modLabel(platform)}+/ でショートカット`;
   const rows = cheatsheetRows(platform);
 
   return (
     <div
-      className="desktop"
+      className="app"
       data-testid="app"
       data-furigana-mode={furi}
       data-dirty={dirty ? "yes" : "no"}
     >
-      <div className="win">
-        <header className="titlebar" data-tauri-drag-region>
-          <svg className="app-ico" viewBox="0 0 16 16" aria-hidden="true">
-            <rect width="16" height="16" fill="#FF00AA" />
-            <rect x="2" y="2" width="12" height="12" fill="#00FFFF" />
-            <rect x="4" y="4" width="8" height="8" fill="#FFFF00" />
-            <rect x="6" y="6" width="4" height="4" fill="#FF0033" />
-          </svg>
-          <div className={`ttl${dirty ? " dirty" : ""}`} data-testid="title" data-tauri-drag-region>
-            {dirty ? "● " : "★ "}
-            {title}
-          </div>
-          <div className="caps">
-            <button type="button" className="cap" aria-label="最小化" onClick={() => void windowButton("min")}>
-              _
-            </button>
-            <button type="button" className="cap" aria-label="最大化" onClick={() => void windowButton("max")}>
-              □
-            </button>
-            <button type="button" className="cap close" aria-label="閉じる" onClick={() => void windowButton("close")}>
-              ×
-            </button>
-          </div>
-        </header>
-
-        <div className="banner">
-          <h1>ようこそ！ ぴこぴこ作文帳</h1>
-          <span className="badge new">NEW!</span>
-          <span className="badge imode">i-mode</span>
-          <span className="badge jsky">J-SKY</span>
-          <span className="badge ez">EZWeb</span>
-          <div className="stars" aria-hidden="true">
-            ★☆★☆★☆★
-          </div>
-        </div>
-
-        <nav className="menubar" ref={menuBarRef} aria-label="メニュー">
-          {MENUS.map((menu) => (
-            <div
-              key={menu.id}
-              className={`menu${openMenu === menu.id ? " open" : ""}`}
-              onMouseEnter={() => {
-                if (openMenu) {
-                  setOpenMenu(menu.id);
-                  setMenuIndex(Math.max(0, firstEnabledIndex(menu)));
-                }
-              }}
+      <nav className="menubar" ref={menuBarRef} aria-label="メニュー" data-tauri-drag-region>
+        {menus.map((menu) => (
+          <div
+            key={menu.id}
+            className={`menu${openMenu === menu.id ? " open" : ""}`}
+            onMouseEnter={() => {
+              if (openMenu) {
+                setOpenMenu(menu.id);
+                setMenuIndex(Math.max(0, firstEnabledIndex(menu)));
+              }
+            }}
+          >
+            <button
+              type="button"
+              className="menu-btn"
+              data-testid={`menu-${menu.id}`}
+              aria-expanded={openMenu === menu.id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => run(menuCommand(menu.id))}
             >
-              <button
-                type="button"
-                className="menu-btn"
-                data-testid={`menu-${menu.id}`}
-                aria-expanded={openMenu === menu.id}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => run(menuCommand(menu.id))}
-              >
-                {menu.label}
-              </button>
-              {openMenu === menu.id && (
-                <div className="dropdown" role="menu">
-                  {menu.items.map((item, index) =>
-                    item.separator ? (
-                      <div key={`sep-${index}`} className="sep-line" role="separator" />
-                    ) : (
-                      <button
-                        key={item.label}
-                        type="button"
-                        role="menuitem"
-                        className={`mi${menuIndex === index ? " active" : ""}`}
-                        disabled={item.disabled}
-                        title={item.todo}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onMouseEnter={() => setMenuIndex(index)}
-                        onClick={() => item.command && run(item.command)}
-                      >
-                        <span>{item.label}</span>
-                        <span className="shortcut">
-                          {item.disabled ? "準備中" : item.command ? shortcutFor(item.command, platform) : ""}
-                        </span>
-                      </button>
-                    ),
-                  )}
-                </div>
+              {menu.label}
+            </button>
+            {openMenu === menu.id && (
+              <div className="dropdown" role="menu">
+                {menu.items.map((item, index) =>
+                  item.separator ? (
+                    <div
+                      key={`sep-${index}`}
+                      className="sep-line"
+                      role="separator"
+                    />
+                  ) : (
+                    <button
+                      key={item.path ?? item.label}
+                      type="button"
+                      role="menuitem"
+                      className={`mi${menuIndex === index ? " active" : ""}`}
+                      disabled={item.disabled}
+                      title={item.path}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setMenuIndex(index)}
+                      onClick={() => pick(item)}
+                    >
+                      <span>{item.label}</span>
+                      <span className="shortcut">
+                        {item.command && !item.path ? shortcutFor(item.command, platform) : ""}
+                      </span>
+                    </button>
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </nav>
+
+      <div className="tb" role="toolbar" aria-label="ツールバー" data-tauri-drag-region>
+        <button
+          type="button"
+          className="tbtn lime"
+          data-testid="btn-new"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("file.new")}
+        >
+          新規
+        </button>
+        <button
+          type="button"
+          className="tbtn"
+          data-testid="btn-open"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("file.open")}
+        >
+          開く
+        </button>
+        <button
+          type="button"
+          className="tbtn"
+          data-testid="btn-save"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("file.save")}
+        >
+          保存
+        </button>
+        <div className="sep" />
+        <select
+          className="style-pick"
+          data-testid="style-pick"
+          aria-label="段落スタイル"
+          value={blockValue}
+          onChange={(e) => block(e.target.value as Block)}
+        >
+          <option value="p">本文</option>
+          <option value="h1">大見出し</option>
+          <option value="h2">中見出し</option>
+          <option value="h3">小見出し</option>
+          <option value="li">箇条書き</option>
+        </select>
+        <button
+          type="button"
+          className="tbtn b"
+          data-testid="btn-bold"
+          title={shortcutFor("format.bold", platform)}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("format.bold")}
+        >
+          太
+        </button>
+        <button
+          type="button"
+          className="tbtn i"
+          data-testid="btn-italic"
+          title={shortcutFor("format.italic", platform)}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("format.italic")}
+        >
+          斜
+        </button>
+        <button
+          type="button"
+          className={`tbtn${kind === "li" ? " on" : ""}`}
+          data-testid="btn-bullet"
+          title={shortcutFor("format.bullet", platform)}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("format.bullet")}
+        >
+          ・箇条
+        </button>
+        <button
+          type="button"
+          className="tbtn"
+          data-testid="btn-table"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("insert.table")}
+        >
+          表
+        </button>
+        <div className="sep" />
+        <button
+          type="button"
+          className={`tbtn cyan${furi !== "hide" ? " on" : ""}`}
+          data-testid="btn-furi"
+          title={`${shortcutFor("view.furigana", platform)} で切替`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("view.furigana")}
+        >
+          ふりがな {furiLabel(furi)}
+        </button>
+        <button
+          type="button"
+          className={`tbtn${dictOpen ? " on" : ""}`}
+          data-testid="btn-dict"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("dict.toggle")}
+        >
+          辞書
+        </button>
+        <button
+          type="button"
+          className={`tbtn${pdf ? " on" : ""}`}
+          data-testid="btn-pdfview"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("view.pdf")}
+        >
+          宿題PDF
+        </button>
+        <button
+          type="button"
+          className={`tbtn${trOpen ? " on" : ""}`}
+          data-testid="btn-translate"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("translate.toggle")}
+        >
+          翻訳
+        </button>
+        <button
+          type="button"
+          className={`tbtn${notesOpen ? " on" : ""}`}
+          data-testid="btn-notes"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("notes.toggle")}
+        >
+          メモ{notes.length > 0 ? `（${notes.length}）` : ""}
+        </button>
+        <div className="sep" />
+        <button
+          type="button"
+          className="tbtn"
+          data-testid="btn-pdf"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("file.pdf")}
+        >
+          PDF出力
+        </button>
+      </div>
+
+      <div className="main">
+        {pdf && (
+          <>
+            <aside className="pdfpane" data-testid="pdfpane" aria-label="PDF" style={{ flexBasis: pdfWidth }}>
+              <Cap title={pdf.name} label="PDFを閉じる" onClose={() => run("view.pdf")} />
+              <PdfView bytes={pdf.bytes} />
+            </aside>
+            <Splitter edge="left" width={pdfWidth} resize={resizePdf} save={savePdfWidth} label="PDFの幅" testId="pdf-splitter" />
+          </>
+        )}
+        {welcome ? (
+          <Welcome
+            recent={recent}
+            newKey={shortcutFor("file.new", platform)}
+            openKey={shortcutFor("file.open", platform)}
+            onNew={() => run("file.new")}
+            onOpen={() => run("file.open")}
+            onSample={() => run("file.sample")}
+            onRecent={(path) => void openPath(path)}
+            draft={readDraft()}
+            onDraft={() => loadDoc({ text: readDraft(), eol: "\n" }, UNTITLED_NAME, null, "下書きを開きました")}
+          />
+        ) : (
+        <div className="desk">
+          <Page ref={pageRef} doc={doc} empty={text.length === 0}
+            furi={furi}
+            onContextMenu={onContextMenu}
+            fontSize={fontSize}
+            onChange={setText}
+            onKind={setKind}
+          />
+        </div>
+        )}
+        {(dictOpen || trOpen || notesOpen) && (
+          <>
+            <Splitter edge="right" width={sideWidth} resize={resizeSide} save={saveSideWidth} label="パネルの幅" testId="side-splitter" />
+            <div className="side" style={{ flexBasis: sideWidth }}>
+              {dictOpen && <Dict seed={dictSeed} onClose={() => setDictOpen(false)} />}
+              {trOpen && <Translate seed={trSeed} onClose={() => setTrOpen(false)} />}
+              {notesOpen && (
+                <Notes
+                  notes={notes}
+                  text={text}
+                  onPick={(n) => {
+                    const at = place(textRef.current, n);
+                    if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
+                  }}
+                  onApply={(n) => {
+                    applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
+                    setNotes((list) => list.filter((x) => x.id !== n.id));
+                  }}
+                  onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
+              onClose={() => setNotesOpen(false)}
+                />
               )}
             </div>
-          ))}
-        </nav>
-
-        <div className="tb" role="toolbar" aria-label="ツールバー">
-          <button type="button" className="tbtn lime" data-testid="btn-new" onMouseDown={(e) => e.preventDefault()} onClick={() => run("file.new")}>
-            新規
-          </button>
-          <button type="button" className="tbtn" data-testid="btn-open" onMouseDown={(e) => e.preventDefault()} onClick={() => run("file.open")}>
-            開く
-          </button>
-          <button type="button" className="tbtn" data-testid="btn-save" onMouseDown={(e) => e.preventDefault()} onClick={() => run("file.save")}>
-            保存
-          </button>
-          <div className="sep" />
-          <button
-            type="button"
-            className={`tbtn cyan${furi !== "hide" ? " on" : ""}`}
-            data-testid="btn-furi"
-            title={`${shortcutFor("view.furigana", platform)} で切替`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => run("view.furigana")}
-          >
-            ふりがな {furiLabel(furi)}
-          </button>
-          <div className="sep" />
-          <button type="button" className="tbtn pink" data-testid="btn-ruby" title={shortcutFor("edit.ruby", platform)} onMouseDown={(e) => e.preventDefault()} onClick={() => run("edit.ruby")}>
-            ルビ
-          </button>
-          <button type="button" className="tbtn" data-testid="btn-dict" disabled title="準備中：辞書パネル（Jisho API）">
-            辞書
-          </button>
-          <button type="button" className="tbtn hot" data-testid="btn-pdf" disabled title="準備中：PDF出力">
-            ▼ PDF出力
-          </button>
-        </div>
-
-        <div className="main">
-          <section className="docframe">
-            <div className="doc-cap">◆ にっきちょう ／ {filename}{dirty ? " *" : ""} ◆</div>
-            <div className="docwrap">
-              <Page ref={pageRef} text={text} furi={furi} fontSize={fontSize} onChange={setText} />
-            </div>
-          </section>
-
-          <aside className="dict todo" aria-label="辞書（準備中）">
-            <div className="dict-cap">◆ ことばサーチ − Jisho.org</div>
-            <div className="dict-body">
-              <div className="search-row">
-                <div className="fake-input">公園</div>
-                <button type="button" className="go" disabled>
-                  検索
-                </button>
-              </div>
-              <div className="headword">
-                <div className="w">公園</div>
-                <div className="r">こうえん</div>
-              </div>
-              <div className="tags">
-                <span className="tagp n4">JLPT N5</span>
-                <span className="tagp">名詞</span>
-                <span className="tagp">WK 7</span>
-              </div>
-              <div className="meanings">
-                <ol>
-                  <li>park; public garden</li>
-                </ol>
-              </div>
-              <div className="ex">
-                <span className="lbl">★ 例文</span>
-                午後、公園を散歩しました。
-              </div>
-              <button type="button" className="insert-btn" disabled>
-                ★ ふりがなを挿入 ★
-              </button>
-              <div className="src">TODO：Jisho API　／　準備中</div>
-            </div>
-            <div className="veil">
-              <strong>準備中</strong>
-              <span>辞書パネルは次の版で入ります</span>
-            </div>
-          </aside>
-        </div>
-
-        <footer className="status">
-          <div className="sp flex" data-testid="status-message">
-            {status || hint}
-          </div>
-          <div className="sp counter" data-testid="hit-counter">
-            訪問者 {hits}
-          </div>
-          <div className="sp" data-testid="status-furi">
-            ふりがな：{furiLabel(furi)}
-          </div>
-          <div className="sp">
-            {countLines(text)}行 / {visibleCharCount(text)}字
-          </div>
-          <div className="sp ime" data-testid="ime" title={imeOn ? "変換中" : "直接入力"}>
-            {imeOn ? "あ" : "A"}
-          </div>
-        </footer>
-
-        <input
-          ref={fileRef}
-          className="file-input"
-          data-testid="file-input"
-          type="file"
-          accept=".txt,.md,text/plain,text/markdown"
-          onChange={(event) => void onPickedFile(event)}
-        />
-
-        {overlay !== "none" && (
-          <div className="overlay" onMouseDown={() => overlay === "cheatsheet" && setOverlay("none")}>
-            {overlay === "cheatsheet" && (
-              <div
-                className="dialog cheat"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="cheatsheet-title"
-                data-testid="cheatsheet"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="dialog-title" id="cheatsheet-title" tabIndex={-1}>
-                  ★ ショートカット一覧 ★
-                </div>
-                <div className="dialog-body cheat-grid">
-                  <p className="cheat-note">
-                    {platform === "mac" ? "⌘ は Command です。" : "Ctrl は Linux / Windows の Control です。"}
-                    日本語入力の変換中（IME）はショートカットを無視します。Esc で閉じます。
-                  </p>
-                  {groupRows(rows).map((group) => (
-                    <section key={group.name}>
-                      <h2>{group.name}</h2>
-                      <table>
-                        <tbody>
-                          {group.rows.map((row) => (
-                            <tr key={row.label}>
-                              <td>{row.label}</td>
-                              <td>
-                                <kbd>{row.keys}</kbd>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </section>
-                  ))}
-                  <p className="cheat-note">
-                    ルビの書き方：<code>漢字《かんじ》</code>　<code>｜食べ《た》</code>　<code>{"{漢字|かんじ}"}</code>
-                    　バックスラッシュでエスケープ。
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {overlay === "ruby" && (
-              <form
-                className="dialog prompt"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="ruby-title"
-                data-testid="ruby-prompt"
-                onMouseDown={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  commitRuby();
-                }}
-              >
-                <div className="dialog-title" id="ruby-title">
-                  ルビを挿入
-                </div>
-                <div className="dialog-body">
-                  <p>
-                    対象：<strong data-testid="ruby-base">{rubyBase}</strong>
-                  </p>
-                  <label className="field">
-                    読み
-                    <input
-                      ref={rubyInputRef}
-                      data-testid="ruby-input"
-                      lang="ja"
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="かんじ"
-                    />
-                  </label>
-                  <p className="cheat-note">Enter で挿入　／　Esc でキャンセル。変換中の Enter は確定に使いません。</p>
-                  <div className="dialog-actions">
-                    <button type="submit" className="tbtn pink">
-                      挿入
-                    </button>
-                    <button type="button" className="tbtn" onClick={() => run("dialog.cancel")}>
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {overlay === "saveas" && (
-              <form
-                className="dialog prompt"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="saveas-title"
-                data-testid="saveas-dialog"
-                onMouseDown={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  commitSaveAs();
-                }}
-              >
-                <div className="dialog-title" id="saveas-title">
-                  名前を付けて保存
-                </div>
-                <div className="dialog-body">
-                  <label className="field">
-                    ファイル名
-                    <input ref={saveAsInputRef} data-testid="saveas-input" defaultValue={saveAsDraft} />
-                  </label>
-                  <p className="cheat-note">拡張子が無いときは .txt を付けます。.md も保存できます。</p>
-                  <div className="dialog-actions">
-                    <button type="submit" className="tbtn lime">
-                      保存
-                    </button>
-                    <button type="button" className="tbtn" onClick={() => run("dialog.cancel")}>
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {overlay === "confirm" && (
-              <div
-                className="dialog prompt"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="confirm-title"
-                data-testid="confirm-dialog"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="dialog-title" id="confirm-title">
-                  保存の確認
-                </div>
-                <div className="dialog-body">
-                  <p>
-                    「{filename}」への変更は保存されていません。
-                  </p>
-                  <div className="dialog-actions">
-                    <button type="button" className="tbtn lime" data-testid="confirm-save" onClick={() => run("dialog.confirm")}>
-                      保存する
-                    </button>
-                    <button
-                      type="button"
-                      className="tbtn"
-                      data-testid="confirm-discard"
-                      onClick={() => {
-                        const action = pendingRef.current;
-                        pendingRef.current = null;
-                        setOverlay("none");
-                        action?.();
-                      }}
-                    >
-                      保存しない
-                    </button>
-                    <button type="button" className="tbtn" data-testid="confirm-cancel" onClick={() => run("dialog.cancel")}>
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {overlay === "about" && (
-              <div
-                className="dialog prompt"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="about-title"
-                data-testid="about-dialog"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="dialog-title" id="about-title">
-                  ぴこぴこ作文帳 Ver.0.1
-                </div>
-                <div className="dialog-body">
-                  <p>ふりがな付きで日本語の作文を書くためのエディタです。</p>
-                  <p>
-                    記法：<code>漢字《かんじ》</code>　<code>｜食べ《た》</code>　<code>{"{漢字|かんじ}"}</code>
-                  </p>
-                  <p className="cheat-note">辞書・PDF出力・自動ふりがなは次の版です。</p>
-                  <div className="dialog-actions">
-                    <button type="button" className="tbtn cyan" onClick={() => run("dialog.cancel")}>
-                      閉じる
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          </>
         )}
       </div>
+
+      <footer className="status">
+        <div className="sp flex" data-testid="status-message">
+          {status || hint}
+        </div>
+        <div className="sp counter" data-testid="hit-counter">
+          訪問者 {hits}
+        </div>
+        <div className="sp" data-testid="status-furi">
+          ふりがな：{furiLabel(furi)}
+        </div>
+        <div className="sp" data-testid="status-count">
+          {counts}
+        </div>
+        <div
+          className="sp ime"
+          data-testid="ime"
+          title={imeOn ? "変換中" : "直接入力"}
+        >
+          {imeOn ? "あ" : "A"}
+        </div>
+      </footer>
+
+      <input
+        ref={fileRef}
+        className="file-input"
+        data-testid="file-input"
+        type="file"
+        accept=".txt,.md,text/plain,text/markdown"
+        onChange={(event) => void onPickedFile(event)}
+      />
+      <input
+        ref={pdfRef}
+        className="file-input"
+        data-testid="pdf-input"
+        type="file"
+        accept=".pdf,application/pdf"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void file.arrayBuffer().then((b) => showPdf(b, file.name));
+        }}
+      />
+
+      {overlay !== "none" && (
+        <div
+          className="overlay"
+          onMouseDown={() => overlay === "cheatsheet" && setOverlay("none")}
+        >
+          {overlay === "cheatsheet" && (
+            <div
+              className="dialog cheat"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cheatsheet-title"
+              data-testid="cheatsheet"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="dialog-title" id="cheatsheet-title" tabIndex={-1}>
+                ★ ショートカット一覧 ★
+              </div>
+              <div className="dialog-body cheat-grid">
+                <p className="cheat-note">
+                  {platform === "mac"
+                    ? "⌘ は Command です。"
+                    : "Ctrl は Linux / Windows の Control です。"}
+                  日本語入力の変換中（IME）はショートカットを無視します。Esc
+                  で閉じます。
+                </p>
+                {groupRows(rows).map((group) => (
+                  <section key={group.name}>
+                    <h2>{group.name}</h2>
+                    <table>
+                      <tbody>
+                        {group.rows.map((row) => (
+                          <tr key={row.label}>
+                            <td>{row.label}</td>
+                            <td>
+                              <kbd>{row.keys}</kbd>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                ))}
+                <p className="cheat-note">
+                  ふりがなは自動で付きます（ファイルには書きません）。
+                  見出し <code># </code>　箇条書き <code>- </code>　太字{" "}
+                  <code>**…**</code>　斜体 <code>*…*</code>　表{" "}
+                  <code>| a | b |</code>
+                  　バックスラッシュでエスケープ。
+                </p>
+              </div>
+            </div>
+          )}
+
+          {overlay === "saveas" && (
+            <form
+              className="dialog prompt"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="saveas-title"
+              data-testid="saveas-dialog"
+              onMouseDown={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                commitSaveAs();
+              }}
+            >
+              <div className="dialog-title" id="saveas-title">
+                名前を付けて保存
+              </div>
+              <div className="dialog-body">
+                <label className="field">
+                  ファイル名
+                  <input
+                    ref={saveAsInputRef}
+                    data-testid="saveas-input"
+                    defaultValue={saveAsDraft}
+                  />
+                </label>
+                <p className="cheat-note">
+                  拡張子が無いときは .txt を付けます。.md も保存できます。
+                </p>
+                <div className="dialog-actions">
+                  <button type="submit" className="tbtn lime">
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    className="tbtn"
+                    onClick={() => run("dialog.cancel")}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {overlay === "confirm" && (
+            <div
+              className="dialog prompt"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-title"
+              data-testid="confirm-dialog"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="dialog-title" id="confirm-title">
+                保存の確認
+              </div>
+              <div className="dialog-body">
+                <p>「{filename}」への変更は保存されていません。</p>
+                <div className="dialog-actions">
+                  <button
+                    type="button"
+                    className="tbtn lime"
+                    data-testid="confirm-save"
+                    onClick={() => run("dialog.confirm")}
+                  >
+                    保存する
+                  </button>
+                  <button
+                    type="button"
+                    className="tbtn"
+                    data-testid="confirm-discard"
+                    onClick={() => {
+                      const action = pendingRef.current;
+                      pendingRef.current = null;
+                      setOverlay("none");
+                      action?.();
+                    }}
+                  >
+                    保存しない
+                  </button>
+                  <button
+                    type="button"
+                    className="tbtn"
+                    data-testid="confirm-cancel"
+                    onClick={() => run("dialog.cancel")}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {overlay === "ai" && ai && (
+            <div
+              className="dialog prompt"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ai-title"
+              data-testid="ai-dialog"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="dialog-title" id="ai-title">
+                AIと接続（MCP）
+              </div>
+              <div className="dialog-body">
+                <p>MCP に対応した AI（Codex、ChatGPT、ローカル LLM など）に次を設定してください。AI は作文を読んで、メモや訂正を付けられます。</p>
+                <label className="field">
+                  URL（Streamable HTTP）
+                  <input readOnly value={ai.url} onFocus={(e) => e.target.select()} />
+                </label>
+                <label className="field">
+                  Bearer トークン
+                  <input readOnly value={ai.token} onFocus={(e) => e.target.select()} />
+                </label>
+                <h2>クラウドの AI（Grok など）</h2>
+                <form
+                  ref={relayFormRef}
+                  data-testid="relay-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = new FormData(e.currentTarget);
+                    const url = String(f.get("url") ?? "").trim();
+                    const key = String(f.get("key") ?? "").trim();
+                    const next = url && key ? { url, key } : null;
+                    try {
+                      if (next) localStorage.setItem(RELAY_KEY, JSON.stringify(next));
+                      else localStorage.removeItem(RELAY_KEY);
+                    } catch {
+                      // Without storage the relay works until the app closes.
+                    }
+                    setRelay(next);
+                    if (!next) setRelayStatus(null);
+                  }}
+                >
+                  <label className="field">
+                    リレーの URL
+                    <input name="url" placeholder="https://pe-ji-relay.＜あなた＞.workers.dev" defaultValue={relay?.url ?? ""} />
+                  </label>
+                  <label className="field">
+                    APP_KEY
+                    <input name="key" type="password" defaultValue={relay?.key ?? ""} />
+                  </label>
+                  <div className="dialog-actions">
+                    <span className="cheat-note" data-testid="relay-status">
+                      {relay ? `状態：${relayStatus ? RELAY_LABEL[relayStatus] : "—"}` : "未設定"}
+                    </span>
+                    <button type="submit" className="tbtn lime">
+                      保存して接続
+                    </button>
+                  </div>
+                </form>
+                <p className="cheat-note">
+                  Grok には <code>{relay ? `${relay.url.replace(/\/+$/, "")}/mcp` : "＜リレーの URL＞/mcp"}</code> と BOT_KEY を設定します。どのパソコンで開いても同じ URL で、最後に開いたパソコンにつながります。キーを知っている人は作文を読めて書けます。
+                </p>
+                <div className="dialog-actions">
+                  <button type="button" className="tbtn cyan" onClick={() => run("dialog.cancel")}>
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {overlay === "about" && (
+            <div
+              className="dialog prompt"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="about-title"
+              data-testid="about-dialog"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="dialog-title" id="about-title">
+                pe-ji（ページ）Ver.0.1
+              </div>
+              <div className="dialog-body">
+                <p>日本語を勉強する人のための小さなワープロです。</p>
+                <p>ふりがなは自動で付きます。表示・非表示・ホバーを選べます。</p>
+                <div className="dialog-actions">
+                  <button
+                    type="button"
+                    className="tbtn cyan"
+                    onClick={() => run("dialog.cancel")}
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <span className="sr-only" data-testid="keymap-count">
         {KEYMAP.length}
       </span>
@@ -995,10 +1661,12 @@ export function App() {
 }
 
 function groupRows(rows: { group: string; label: string; keys: string }[]) {
-  const groups: { name: string; rows: { label: string; keys: string }[] }[] = [];
+  const groups: { name: string; rows: { label: string; keys: string }[] }[] =
+    [];
   for (const row of rows) {
     const last = groups[groups.length - 1];
-    if (!last || last.name !== row.group) groups.push({ name: row.group, rows: [] });
+    if (!last || last.name !== row.group)
+      groups.push({ name: row.group, rows: [] });
     groups[groups.length - 1].rows.push({ label: row.label, keys: row.keys });
   }
   return groups;

@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# A newer push to the same branch replaces the run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,11 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - name: System libraries for Tauri
         run: |
@@ -25,5 +28,5 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: cargo test
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm e2e

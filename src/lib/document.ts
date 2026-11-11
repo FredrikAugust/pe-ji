@@ -16,7 +16,7 @@ export function nextFontSize(size: number, dir: -1 | 0 | 1): number {
 }
 
 export function formatTitle(filename: string, dirty: boolean): string {
-  return `${dirty ? "*" : ""}${filename} — ぴこぴこ作文帳`;
+  return `${dirty ? "*" : ""}${filename} — pe-ji`;
 }
 
 export function furiLabel(mode: FuriMode): string {
@@ -29,12 +29,17 @@ export function isDirty(text: string, saved: string): boolean {
   return text !== saved;
 }
 
-/** Visible characters, ignoring line breaks. */
+/** Characters on the page: readings, notes, and markup are left out. Approximate for odd markup. */
 export function countChars(text: string): number {
-  return Array.from(text.replace(/\r\n/g, "\n").replace(/\n/g, "")).length;
+  const seen = text
+    .replace(/\{([^|}\n]*)\|[^}\n]*\}/g, "$1")
+    .replace(/［＃[^］\n]*］|《[^》\n]*》|^\t*(?:#{1,3} |[-*] )|[\\｜|*\t\n]/gm, "");
+  return seen.length - (seen.match(/[\uD800-\uDBFF]/g)?.length ?? 0);
 }
 
 export function countLines(text: string): number {
   if (!text) return 0;
-  return text.replace(/\r\n/g, "\n").split("\n").length;
+  let n = 1;
+  for (let i = text.indexOf("\n"); i >= 0; i = text.indexOf("\n", i + 1)) n++;
+  return n;
 }

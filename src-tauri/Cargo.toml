@@ -1,22 +1,24 @@
 [package]
-name = "pico-sakubun"
+name = "pe-ji"
 version = "0.1.0"
-description = "ぴこぴこ作文帳 — Japanese homework editor"
+description = "pe-ji (ページ) — a small word processor for Japanese learners"
 authors = ["Fredrik"]
 edition = "2021"
 rust-version = "1.90"
 
 [lib]
-name = "pico_sakubun_lib"
+name = "pe_ji_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
-pico-core = { path = "../crates/pico-core" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+lindera = { version = "6.2.0", default-features = false, features = ["embed-ipadic"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"] }
+getrandom = "0.3.4"
+serde_json = "1.0.154"
+tiny_http = "0.12.0"
 tauri = { version = "2.12.5", features = [] }
 tauri-plugin-dialog = "2.8.4"
 

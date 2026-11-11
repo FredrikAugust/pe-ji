@@ -12,10 +12,24 @@ export type CommandId =
   | "file.saveAs"
   | "file.sample"
   | "file.close"
-  | "edit.ruby"
-  | "edit.rubyNext"
-  | "edit.rubyPrev"
+  | "file.pdf"
+  | "file.recent"
   | "edit.selectAll"
+  | "edit.undo"
+  | "edit.redo"
+  | "format.bold"
+  | "format.italic"
+  | "format.h1"
+  | "format.h2"
+  | "format.h3"
+  | "format.body"
+  | "format.bullet"
+  | "format.indent"
+  | "format.outdent"
+  | "insert.table"
+  | "dict.toggle"
+  | "view.pdf"
+  | "dict.lookup"
   | "view.furigana"
   | "view.furi.show"
   | "view.furi.hide"
@@ -28,6 +42,7 @@ export type CommandId =
   | "menu.file"
   | "menu.edit"
   | "menu.view"
+  | "menu.format"
   | "menu.insert"
   | "menu.dict"
   | "menu.help"
@@ -51,10 +66,10 @@ export interface Binding {
   chord: Chord;
   /** When false, the binding is omitted from the cheatsheet. */
   cheat?: boolean;
-  when?: "global" | "outside-editor";
+  when?: "global" | "outside-editor" | "editor";
 }
 
-export type Overlay = "none" | "ruby" | "saveas" | "confirm" | "cheatsheet" | "about";
+export type Overlay = "none" | "saveas" | "confirm" | "cheatsheet" | "about";
 
 export interface KeyLike {
   key: string;
@@ -102,11 +117,20 @@ export const KEYMAP: Binding[] = [
   { id: "file.open", group: "ファイル", label: "開く", chord: { key: "o", mod: true, shift: false, alt: false } },
   { id: "file.save", group: "ファイル", label: "保存", chord: { key: "s", mod: true, shift: false, alt: false } },
   { id: "file.saveAs", group: "ファイル", label: "名前を付けて保存", chord: { key: "s", mod: true, shift: true, alt: false } },
-  { id: "edit.ruby", group: "編集", label: "ルビを挿入", chord: { key: "r", mod: true, shift: false, alt: false } },
-  { id: "edit.rubyNext", group: "編集", label: "次のルビへ", chord: { key: "ArrowDown", mod: false, shift: false, alt: true } },
-  { id: "edit.rubyPrev", group: "編集", label: "前のルビへ", chord: { key: "ArrowUp", mod: false, shift: false, alt: true } },
-  { id: "edit.rubyNext", group: "編集", label: "次のルビへ", chord: { key: "ArrowDown", mod: true, shift: true, alt: false } },
-  { id: "edit.rubyPrev", group: "編集", label: "前のルビへ", chord: { key: "ArrowUp", mod: true, shift: true, alt: false } },
+  { id: "file.pdf", group: "ファイル", label: "PDF出力", chord: { key: "p", mod: true, shift: false, alt: false } },
+  { id: "file.close", group: "ファイル", label: "閉じる", chord: { key: "w", mod: true, shift: false, alt: false } },
+  { id: "edit.undo", group: "編集", label: "元に戻す", chord: { key: "z", mod: true, shift: false, alt: false }, when: "editor" },
+  { id: "edit.redo", group: "編集", label: "やり直す", chord: { key: "z", mod: true, shift: true, alt: false }, when: "editor" },
+  { id: "edit.redo", group: "編集", label: "やり直す", chord: { key: "y", mod: true, shift: false, alt: false }, when: "editor" },
+  { id: "format.bold", group: "書式", label: "太字", chord: { key: "b", mod: true, shift: false, alt: false } },
+  { id: "format.italic", group: "書式", label: "斜体", chord: { key: "i", mod: true, shift: false, alt: false } },
+  { id: "format.h1", group: "書式", label: "大見出し", chord: { key: "1", mod: true, shift: false, alt: false } },
+  { id: "format.h2", group: "書式", label: "中見出し", chord: { key: "2", mod: true, shift: false, alt: false } },
+  { id: "format.h3", group: "書式", label: "小見出し", chord: { key: "3", mod: true, shift: false, alt: false } },
+  { id: "format.bullet", group: "書式", label: "箇条書き", chord: { key: "8", mod: true, shift: true, alt: false } },
+  { id: "format.indent", group: "書式", label: "字下げ（表では次のセル）", chord: { key: "Tab", mod: false, shift: false, alt: false }, when: "editor" },
+  { id: "format.outdent", group: "書式", label: "字下げを戻す", chord: { key: "Tab", mod: false, shift: true, alt: false }, when: "editor" },
+  { id: "dict.lookup", group: "辞書", label: "選択中の語を辞書で引く", chord: { key: "d", mod: true, shift: false, alt: false } },
   { id: "view.furigana", group: "表示", label: "ふりがなを切替", chord: { key: "f", mod: true, shift: true, alt: false } },
   { id: "view.fontUp", group: "表示", label: "文字を大きく", chord: { key: "=", mod: true, shift: false, alt: false } },
   { id: "view.fontUp", group: "表示", label: "文字を大きく", chord: { key: "+", mod: true, shift: true, alt: false } },
@@ -123,12 +147,13 @@ export const KEYMAP: Binding[] = [
   { id: "menu.file", group: "メニュー", label: "ファイルメニュー", chord: { key: "f", mod: false, shift: false, alt: true } },
   { id: "menu.edit", group: "メニュー", label: "編集メニュー", chord: { key: "e", mod: false, shift: false, alt: true } },
   { id: "menu.view", group: "メニュー", label: "表示メニュー", chord: { key: "v", mod: false, shift: false, alt: true } },
+  { id: "menu.format", group: "メニュー", label: "書式メニュー", chord: { key: "o", mod: false, shift: false, alt: true } },
   { id: "menu.insert", group: "メニュー", label: "挿入メニュー", chord: { key: "i", mod: false, shift: false, alt: true } },
   { id: "menu.dict", group: "メニュー", label: "辞書メニュー", chord: { key: "d", mod: false, shift: false, alt: true } },
   { id: "menu.help", group: "メニュー", label: "ヘルプメニュー", chord: { key: "h", mod: false, shift: false, alt: true } },
 ];
 
-const PROMPTS: Overlay[] = ["ruby", "saveas", "confirm", "about"];
+const PROMPTS: Overlay[] = ["saveas", "confirm", "about"];
 
 export function matchKey(e: KeyLike, ctx: KeyContext): CommandId | null {
   if (imeShouldIgnore(e, { composing: ctx.composing, suppressUntil: ctx.suppressUntil }, ctx.now)) {
@@ -148,6 +173,7 @@ export function matchKey(e: KeyLike, ctx: KeyContext): CommandId | null {
   }
   for (const binding of KEYMAP) {
     if (binding.when === "outside-editor" && ctx.target === "editor") continue;
+    if (binding.when === "editor" && ctx.target !== "editor") continue;
     if (chordMatches(e, binding.chord, mod, other)) return binding.id;
   }
   return null;

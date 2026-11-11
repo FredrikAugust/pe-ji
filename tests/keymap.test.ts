@@ -111,11 +111,11 @@ describe("keymap", () => {
 
   it("lets Enter confirm a prompt and swallows other shortcuts", () => {
     const save = eventFor(KEYMAP.find((b) => b.id === "file.save")!.chord, "other");
-    expect(matchKey(save, ctx({ overlay: "ruby" }))).toBeNull();
+    expect(matchKey(save, ctx({ overlay: "saveas" }))).toBeNull();
     expect(
       matchKey(
         { key: "Enter", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false },
-        ctx({ overlay: "ruby" }),
+        ctx({ overlay: "saveas" }),
       ),
     ).toBe("dialog.confirm");
     expect(
@@ -127,7 +127,7 @@ describe("keymap", () => {
     expect(
       matchKey(
         { key: "Enter", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: true },
-        ctx({ overlay: "ruby" }),
+        ctx({ overlay: "saveas" }),
       ),
     ).toBeNull();
   });
@@ -152,9 +152,7 @@ describe("keymap", () => {
       "開く",
       "保存",
       "名前を付けて保存",
-      "ルビを挿入",
-      "次のルビへ",
-      "前のルビへ",
+      "PDF出力",
       "ふりがなを切替",
       "文字を大きく",
       "文字を小さく",
@@ -163,9 +161,9 @@ describe("keymap", () => {
     ]) {
       expect(rows.some((row) => row.label === label)).toBe(true);
     }
-    const next = rows.find((row) => row.label === "次のルビへ");
-    expect(next?.keys).toContain("Alt+↓");
-    expect(next?.keys).toContain("Ctrl+Shift+↓");
+    const redo = rows.find((row) => row.label === "やり直す");
+    expect(redo?.keys).toContain("Ctrl+Shift+Z");
+    expect(redo?.keys).toContain("Ctrl+Y");
   });
 
   it("detects macOS", () => {

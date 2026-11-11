@@ -1,14 +1,26 @@
 # ぴこぴこ作文帳
 
-A small desktop editor for Japanese homework. You write on one page. Furigana sits above the kanji as you edit. The file on disk is still plain text with furigana markup.
+A small word processor for people learning Japanese. You write on one page with headings, bullets, bold, italic, indents and tables. Furigana sits above the kanji as you edit. The file on disk is still one plain-text file.
 
 Repository: [FredrikAugust/pe-ji](https://github.com/FredrikAugust/pe-ji). Development is on `main`.
 
-This is **v0**: that page, the three furigana modes, and file open/save. The dictionary panel and PDF export are visible but disabled.
+It has the page, automatic furigana in three modes, a Jisho dictionary panel, a PDF viewer beside the page, Aozora Bunko files, open/save, Open Recent, and PDF export (print to PDF).
 
-The window is a late-90s Japanese web page on purpose (Geocities / i-mode). Chrome uses the bundled [DotGothic16](https://fonts.google.com/specimen/DotGothic16) pixel font. The document itself uses bundled [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP) so the writing stays easy to read. Nothing is loaded from a CDN at runtime.
+The window has no OS frame; drag it by the menu bar or toolbar. The menus are mirrored into the macOS menu bar, and right-click opens a native menu. Chrome uses the bundled [DotGothic16](https://fonts.google.com/specimen/DotGothic16) pixel font. The document itself uses bundled [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP) so the writing stays easy to read. Nothing is loaded from a CDN at runtime.
 
 ## Markup
+
+Every line of the file is one paragraph.
+
+| Write this | You get |
+| --- | --- |
+| `# 題`, `## 題`, `### 題` | heading (large, medium, small) |
+| `- 項目` (or `* 項目`) | bullet |
+| leading tabs | indent; Tab / Shift-Tab add and remove them |
+| `**太字**`, `*斜体*` | bold, italic |
+| `\| 漢字 \| かんじ \|` | table row; consecutive rows form one table |
+
+Inside a table cell the half-width `|` separates cells, so write explicit ruby with the full-width `｜`, or use `{漢字|かんじ}`.
 
 | Write this | Reading on |
 | --- | --- |
@@ -21,10 +33,22 @@ Rules the parser actually implements:
 - The pipe is optional only when the base is a run of kanji (CJK ideographs, `々`, `〆`, `ヵ`, `ヶ`, and the CJK extension blocks). Okurigana blocks the implicit form: `晴れ《はれ》` is literal; write `晴《はれ》れ` or `｜晴れ《はれ》`.
 - Ruby does not cross a newline. Unmatched `《》`, `{}`, or a pipe with no reading stays as literal text.
 - An empty base is not ruby. An empty reading (`漢字《》`, `{漢字|}`) is ruby with an empty `<rt>`.
-- A backslash escapes the next character: `\《`, `\{`, `\\`, `\|`.
+- A backslash escapes the next character: `\《`, `\{`, `\\`, `\|`, `\*`. A plain paragraph that starts with `# `, `- ` or a tab is written with a leading `\`.
 - The page paints text nodes, not `innerHTML`, so `<` in the document cannot become markup. Paste is plain text.
 
-The Rust parser in `crates/pico-core` and the TypeScript parser in `src/lib/parser.ts` are locked to the same cases in `testdata/ruby_cases.json`.
+The grammar lives in `src/lib/parser.ts`; `testdata/ruby_cases.json` pins the ruby cases.
+
+Only lines you edit are written back from the page. Every other line goes back to disk byte for byte, including markup the page shows differently.
+
+## Aozora Bunko
+
+Open an Aozora `.txt` (unzip it first). Shift_JIS is detected, and saving writes UTF-8 with the file's original line endings. The page renders `［＃「…」は大見出し］`/`中`/`小` and `［＃大見出し］…［＃大見出し終わり］`, `［＃「…」は太字］` and `［＃太字］…［＃太字終わり］`, `［＃「…」に傍点］` (and 白ゴマ, 丸, 白丸, 二重丸, 三角 variants), and `［＃N字下げ］` at the start of a line. The notes block between the two dashed rules at the top is hidden. Any other note is hidden on the page and kept in the file.
+
+## Furigana and dictionary
+
+Furigana is automatic and only drawn, never written to the file. The desktop app splits each line with Lindera (embedded IPADIC) in Rust and puts the reading over the kanji only, single kanji included (食べる → 食《た》べる). Readings are cached per line for the session. The caret cannot go into a reading. Ruby already in a file (`漢字《かんじ》`, `｜食べ《た》`, `{漢字|かんじ}`) still shows and is saved back unchanged. In a plain browser (dev only) there is no tokenizer, so only file ruby shows.
+
+The 辞書 panel searches Jisho and shows the word with furigana, JLPT level, whether it is common, each sense with its part of speech, Jisho's notes (for example "Usually written using kana alone"), other spellings, and a link to the Jisho page. In the desktop app the request goes through Rust, and every answer, misses included, is cached under the app cache folder (`jisho/`). Each word is fetched once per session in memory as well. In a plain browser (dev only) the page calls Jisho directly, which needs Jisho to allow CORS.
 
 ## Keybindings
 
@@ -36,27 +60,33 @@ Mod is **⌘ on macOS** and **Ctrl on Linux and Windows**. Shortcuts are ignored
 | 開く Open | Ctrl+O | ⌘O |
 | 保存 Save | Ctrl+S | ⌘S |
 | 名前を付けて保存 Save As | Ctrl+Shift+S | ⌘⇧S |
-| ルビを挿入 Insert ruby | Ctrl+R | ⌘R |
-| 次のルビへ Next ruby | Alt+↓ or Ctrl+Shift+↓ | ⌥↓ or ⌘⇧↓ |
-| 前のルビへ Previous ruby | Alt+↑ or Ctrl+Shift+↑ | ⌥↑ or ⌘⇧↑ |
+| PDF出力 Export PDF (print) | Ctrl+P | ⌘P |
+| 閉じる Close | Ctrl+W | ⌘W |
+| すべて選択 Select all | Ctrl+A | ⌘A or Ctrl+A |
+| 太字 / 斜体 Bold / italic | Ctrl+B / Ctrl+I | ⌘B / ⌘I |
+| 見出し Heading 1–3 (again for body text) | Ctrl+1 / 2 / 3 | ⌘1 / 2 / 3 |
+| 箇条書き Bullet | Ctrl+Shift+8 | ⌘⇧8 |
+| 字下げ Indent / outdent (next / previous cell in a table) | Tab / Shift+Tab | Tab / ⇧Tab |
+| 元に戻す / やり直す Undo / redo | Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y | ⌘Z / ⌘⇧Z |
+| 辞書で引く Look up selection | Ctrl+D | ⌘D |
 | ふりがなを切替 Cycle furigana | Ctrl+Shift+F | ⌘⇧F |
 | 文字を大きく Larger type | Ctrl+= or Ctrl++ | ⌘= or ⌘+ |
 | 文字を小さく Smaller type | Ctrl+- | ⌘- |
 | 文字サイズを戻す Reset type | Ctrl+0 | ⌘0 |
 | ショートカット一覧 Cheatsheet | Ctrl+/ , or `?` outside the editor | ⌘/ , or `?` |
-| Menus | Alt+F E V I D H | ⌥F E V I D H |
+| Menus | Alt+F E V O I D H | ⌥F E V O I D H |
 
-Esc closes the cheatsheet, the ruby prompt, and menus. Enter confirms the ruby prompt and save-as dialog (not while the IME is composing). The whole table lives in `src/lib/keymap.ts`.
+Esc closes dialogs and menus. Enter confirms the save-as dialog (not while the IME is composing). The whole table lives in `src/lib/keymap.ts`.
 
-Insert ruby: select the kanji on the page, press the shortcut, type the furigana, Enter. Pure kanji is saved as `漢字《よみ》`. Anything else is saved as `｜食べ《た》`.
+Enter on a bullet continues the list; Enter on an empty bullet ends it. Backspace at the start of a bullet or heading removes the marker first, then one indent. Enter in a table adds a row; Enter in an empty row leaves the table. Copy and paste carry the markup.
 
-Furigana cycles **表示 → 非表示 → ホバー**. Hover keeps the furigana invisible until the pointer is on that word. There is one page, not a source pane beside a preview.
+Furigana cycles **表示 → 非表示 → ホバー**, and the choice is remembered. Hover keeps the furigana invisible until the pointer is on that word. There is one page, not a source pane beside a preview.
 
 ## Develop
 
-Requirements: Node.js 22+, pnpm 10.33.4 (`packageManager` in `package.json`; Corepack picks it up), Rust **1.90+** (Tauri 2.12), and a WebKitGTK 4.1 toolchain on Linux.
+Requirements: Node.js 22+, pnpm 12.18.0 (`packageManager` in `package.json`; Corepack and CI pick it up), Rust **1.90+** (Tauri 2.12), and a WebKitGTK 4.1 toolchain on Linux.
 
-pnpm only installs versions that have been on the registry for at least 7 days (`.npmrc`). That matches Aikido's cooldown. The `vite` and `@playwright/test` ranges include a release from before that window.
+pnpm only installs versions that have been on the registry for at least 7 days (`minimumReleaseAge` in `pnpm-workspace.yaml`). That matches Aikido's cooldown. The `vite` and `@playwright/test` ranges include a release from before that window.
 
 ### Linux
 
@@ -76,7 +106,7 @@ pnpm install
 pnpm tauri:dev
 ```
 
-The dev server is Vite on `http://127.0.0.1:43123`. You can open that URL without the Tauri shell; open/save then uses a file input and a download. Inside the desktop shell, open/save uses native dialogs and writes UTF-8 (BOM stripped on read, atomic replace on write).
+The dev server is Vite on `http://127.0.0.1:43123`. You can open that URL without the Tauri shell; open/save then uses a file input and a download. Inside the desktop shell, open/save uses native dialogs and writes UTF-8 (BOM stripped on read, atomic replace on write). The window has a content security policy; `tauri dev` runs without it.
 
 ### Build
 
@@ -102,28 +132,28 @@ The macOS app is unsigned. The first launch is Right Click → Open. Linux and W
 ## Tests
 
 ```bash
-cargo test          # parser fixtures + UTF-8 file IO
-pnpm test           # keymap, ruby insert, navigation
+cargo test          # atomic file write, Lindera readings
+pnpm test           # parser, edits, furigana alignment, decoding, keymap
 pnpm e2e            # Playwright against the real UI
 pnpm check          # all three
 ```
 
-`pnpm e2e` covers every binding above, the three furigana modes (including hover), open/save/save-as, the dirty-close confirm, and an IME simulation (`compositionstart` suppresses Ctrl+S). A full OS IME is not available to headless Chromium; the guard itself is also unit-tested. The Tauri window itself is not driven by tauri-driver here.
+`pnpm e2e` covers formatting, indents, tables, Aozora files, the dictionary (Jisho is mocked), automatic furigana (the tokenizer is stubbed), print layout, every binding above, the three furigana modes (including hover), open/save/save-as, the dirty-close confirm, and an IME simulation (`compositionstart` suppresses Ctrl+S). A full OS IME is not available to headless Chromium; the guard itself is also unit-tested. The Tauri window itself is not driven by tauri-driver here.
 
 ## Roadmap
 
-- Dictionary panel via the Jisho API (search, JLPT/WK tags, insert the reading).
-- PDF export with furigana on or off.
-- Automatic furigana for kanji you have not annotated yet.
 - Configurable keymap (the table is already data-driven).
-- Remember window size, font size, and the last furigana mode.
+- Remember window size and font size.
 
 ## Layout
 
 ```
-crates/pico-core/     Rust parser, HTML escape, UTF-8 read/write
-src-tauri/            Tauri 2 shell and file commands
+src-tauri/            Tauri 2 shell: file bytes, atomic write, Lindera readings, cached Jisho fetch
+src/lib/parser.ts     the file grammar (lines, ruby, emphasis, Aozora notes)
+src/lib/edit.ts       source-level commands (blocks, indent, tables)
+src/lib/furigana.ts   automatic readings (cache, okurigana alignment)
+src/ui/render.ts      source line <-> DOM
+src/ui/Page.tsx       the editable page
 src/lib/keymap.ts     one keymap
-src/lib/parser.ts     same grammar as the Rust crate
 testdata/ruby_cases.json
 ```

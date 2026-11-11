@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["crates/pico-core", "src-tauri"]
+members = ["src-tauri"]

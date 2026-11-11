@@ -29,8 +29,9 @@ describe("document state", () => {
     expect(formatTitle("無題.txt", true)).toBe("*無題.txt — ぴこぴこ作文帳");
     expect(isDirty("a", "a")).toBe(false);
     expect(isDirty("a", "b")).toBe(true);
-    expect(countChars("あ\r\nい\n")).toBe(2);
-    expect(countLines("あ\r\nい\n")).toBe(3);
+    expect(countChars("あ\nい\n")).toBe(2);
+    expect(countChars("# 漢字《かんじ》と{食べ|た}**る**［＃「る」に傍点］")).toBe(6);
+    expect(countLines("あ\nい\n")).toBe(3);
     expect(countLines("")).toBe(0);
   });
 });

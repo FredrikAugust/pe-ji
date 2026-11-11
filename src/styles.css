@@ -236,6 +236,7 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   -webkit-user-select: none;
   user-select: none;
 }
+.page rt::before { content: attr(data-r); }
 .page rt::selection { background: transparent; color: inherit; }
 
 .page.furi-hide rt { display: none; }

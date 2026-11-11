@@ -613,6 +613,17 @@ export const Page = forwardRef<
           e.preventDefault();
           window.getSelection()?.selectAllChildren(e.currentTarget);
         }
+        // WebKit stops twice at the end of a word with furigana (end of the kanji, then after the word),
+        // so Shift+←/→ sometimes seems to do nothing. Step again when the selection did not change.
+        if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.nativeEvent.isComposing && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+          const sel = window.getSelection();
+          if (!sel?.rangeCount) return;
+          e.preventDefault();
+          const dir = e.key === "ArrowLeft" ? "backward" : "forward";
+          const before = sel.toString();
+          sel.modify("extend", dir, "character");
+          if (sel.toString() === before) sel.modify("extend", dir, "character");
+        }
       }}
       onContextMenu={onContextMenu}
       onCopy={(e) => copy(e, false)}

@@ -65,7 +65,7 @@ test("renders the sample diary with real ruby on the page you edit", async ({ pa
   await expect(page).toHaveTitle("十一月の日記.txt — pe-ji");
   await expect(page.locator(".titlebar, .banner, .caps")).toHaveCount(0);
   const editor = page.getByTestId("editor");
-  await expect(editor.locator("rt").filter({ hasText: "きのう" }).first()).toBeVisible();
+  await expect(editor.locator('rt[data-r="きのう"]').first()).toBeVisible();
   await expect(page.locator(".pane")).toHaveCount(0);
   await expect(page.getByTestId("status-furi")).toHaveText("ふりがな：表示");
   await expect(page.getByTestId("btn-pdf")).toBeEnabled();
@@ -181,8 +181,8 @@ test("saves and saves-as via download, then opens a file", async ({ page }) => {
     buffer: Buffer.from("試験《しけん》です\n{歩く|あるく}", "utf-8"),
   });
   await expect.poll(() => markup(page)).toBe("試験《しけん》です\n{歩く|あるく}");
-  await expect(box.locator("rt").nth(0)).toHaveText("しけん");
-  await expect(box.locator("rt").nth(1)).toHaveText("あるく");
+  await expect(box.locator("rt").nth(0)).toHaveAttribute("data-r", "しけん");
+  await expect(box.locator("rt").nth(1)).toHaveAttribute("data-r", "あるく");
   await expect(page).toHaveTitle(/yomikata\.txt/);
   await expect(page.getByTestId("status-message")).toHaveText("開きました");
 });
@@ -412,7 +412,7 @@ test("opens a Shift_JIS Aozora text without raw notes and saves it back intact",
   expect(shown).not.toContain("［＃");
   expect(shown).not.toContain("記号について");
   expect(shown).toContain("名前はまだ無い");
-  await expect(box.locator("rt", { hasText: "わがはい" })).toBeVisible();
+  await expect(box.locator('rt[data-r="わがはい"]')).toBeVisible();
 
   await placeCaret(page, "名前はまだ無い");
   await page.keyboard.type("！");
@@ -443,7 +443,7 @@ test("shows readings automatically, single kanji too, and never writes them", as
   await stubReadings(page);
   await setDoc(page, "昨日は日が出た。食べた。");
   const box = page.getByTestId("editor");
-  for (const r of ["きのう", "ひ", "た"]) await expect(box.locator("ruby[data-auto] rt", { hasText: r }).first()).toBeVisible();
+  for (const r of ["きのう", "ひ", "た"]) await expect(box.locator(`ruby[data-auto] rt[data-r="${r}"]`).first()).toBeVisible();
   await expect(box.locator("ruby[data-auto]", { hasText: "食" })).not.toContainText("べ");
 
   await placeCaret(page, "べた。", "end");
@@ -451,7 +451,7 @@ test("shows readings automatically, single kanji too, and never writes them", as
   await expect.poll(() => markup(page)).toBe("昨日は日が出た。食べた。よ");
 
   // A caret that lands in a reading (WebKit can put it there) moves after the word.
-  await box.locator("ruby[data-auto] rt", { hasText: "きのう" }).evaluate((rt) => getSelection()!.collapse(rt.firstChild, 1));
+  await box.locator('ruby[data-auto] rt[data-r="きのう"]').evaluate((rt) => getSelection()!.collapse(rt, 0));
   await page.keyboard.insertText("X");
   await expect.poll(() => markup(page)).toBe("昨日Xは日が出た。食べた。よ");
 
@@ -642,6 +642,29 @@ test("readings are never part of a selection @webkit", async ({ page }) => {
   const sel = await page.evaluate(() => getSelection()!.toString());
   expect(sel).toContain("昨日の日記");
   expect(sel).not.toContain("きのう");
+});
+
+test("arrow keys step one character across words with readings @webkit", async ({ page }) => {
+  await stubReadings(page);
+  await setDoc(page, "あ昨日は日い");
+  const box = page.getByTestId("editor");
+  await expect(box.locator('rt[data-r="きのう"]')).toBeVisible();
+  await placeCaret(page, "あ", "start");
+  const seen: string[] = [];
+  for (let k = 0; k < 6; k++) {
+    await page.keyboard.press("Shift+ArrowRight");
+    seen.push(await page.evaluate(() => getSelection()!.toString()));
+  }
+  expect(seen).toEqual(["あ", "あ昨", "あ昨日", "あ昨日は", "あ昨日は日", "あ昨日は日い"]);
+  for (let k = 0; k < 2; k++) await page.keyboard.press("Shift+ArrowLeft");
+  expect(await page.evaluate(() => getSelection()!.toString())).toBe("あ昨日は");
+  await page.keyboard.press("Shift+ArrowLeft");
+  expect(await page.evaluate(() => getSelection()!.toString())).toBe("あ昨日");
+
+  await placeCaret(page, "あ", "start");
+  for (let k = 0; k < 3; k++) await page.keyboard.press("ArrowRight");
+  await page.keyboard.insertText("X");
+  await expect.poll(() => markup(page)).toBe("あ昨日Xは日い");
 });
 
 test("side panes close with × and the side column resizes", async ({ page }) => {

@@ -44,7 +44,8 @@ function rubyEl(base: string, reading: string): HTMLElement {
   ruby.append(base);
   const rt = document.createElement("rt");
   rt.contentEditable = "false";
-  rt.textContent = reading;
+  // Drawn by CSS, so the reading is not text the caret or a selection can step through.
+  rt.dataset.r = reading;
   ruby.append(rt);
   return ruby;
 }
@@ -242,8 +243,8 @@ export function serialize(line: HTMLElement, pts: Pt[] = []): { text: string; at
       return;
     } else if (tag === "RUBY") {
       const base = baseText(node);
-      const reading = node.querySelector("rt")?.textContent ?? "";
-      if (node.dataset.raw && base === node.dataset.base && reading === node.dataset.reading) out += node.dataset.raw;
+      const reading = node.dataset.reading ?? "";
+      if (node.dataset.raw && base === node.dataset.base) out += node.dataset.raw;
       else if (base) out += formatRubyMarkup(base, reading);
       else out += escapeText(reading);
     } else if (tag === "TD" || tag === "TH") {

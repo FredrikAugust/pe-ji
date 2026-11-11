@@ -256,11 +256,10 @@ input, textarea, select { background: var(--field); color: var(--ink); }
 
 /* Side panels share one column, stacked, so opening several never squeezes the page. */
 .side {
-  flex: 0 0 300px;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--lo);
 }
 .side > .dict + .dict { border-top: 1px solid var(--lo); }
 
@@ -272,7 +271,10 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   font-size: 14px;
 }
 
-.dict-cap { background: var(--navy); color: #fff; padding: 3px 8px; }
+.dict-cap { display: flex; align-items: center; gap: 8px; background: var(--navy); color: #fff; padding: 3px 4px 3px 8px; white-space: nowrap; }
+.cap-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cap-close { display: flex; align-items: center; justify-content: center; flex: 0 0 20px; height: 20px; padding: 0; background: none; border: 0; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
+.cap-close:hover { background: #ffff00; color: var(--navy); }
 
 .search-row { display: flex; gap: 4px; padding: 6px; }
 .search-row input {
@@ -309,10 +311,6 @@ input, textarea, select { background: var(--field); color: var(--ink); }
 .note { font-size: 12px; color: var(--note-ink); }
 
 .pdfpane { flex: 0 0 auto; display: flex; flex-direction: column; min-width: 0; }
-.pdfpane .dict-cap { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.pdf-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pdf-close { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; background: none; border: 0; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
-.pdf-close:hover { background: #ffff00; color: var(--navy); }
 .splitter { flex: 0 0 6px; cursor: col-resize; background: var(--gray); border-left: 1px solid var(--hi); border-right: 1px solid var(--lo); touch-action: none; }
 .splitter:focus-visible { outline: 1px dotted var(--ink); outline-offset: -2px; }
 .pdfpane iframe { flex: 1; border: 0; width: 100%; background: var(--paper); }
@@ -439,7 +437,7 @@ code { font-family: var(--doc); background: var(--field); padding: 0 4px; border
 }
 
 @media (max-width: 900px) {
-  .side { display: none; }
+  .side, .splitter:has(+ .side) { display: none; }
 }
 
 @page { margin: 20mm 18mm; }

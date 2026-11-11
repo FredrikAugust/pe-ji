@@ -56,6 +56,7 @@ import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
 import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
 import { Notes } from "./ui/Notes";
+import { Cap, Splitter, usePaneWidth } from "./ui/Pane";
 import { place, type Note } from "./lib/notes";
 import { connectRelay, type RelayStatus } from "./lib/relay";
 import { Page, type PageHandle } from "./ui/Page";
@@ -65,6 +66,7 @@ const HIT_SESSION = "pico-sakubun-hit-session";
 const FURI_KEY = "pico.furigana";
 const AI_KEY = "pico.ai";
 const PDF_WIDTH_KEY = "pico.pdfWidth";
+const SIDE_WIDTH_KEY = "pico.sideWidth";
 const RELAY_KEY = "pico.relay";
 const RELAY_LABEL: Record<RelayStatus, string> = {
   connecting: "接続中…",
@@ -169,21 +171,8 @@ export function App() {
     showPdf(await invoke<ArrayBuffer>("read_document", { path }), basename(path));
   }, [showPdf]);
 
-  const [pdfWidth, setPdfWidth] = useState(() => {
-    try {
-      return Number(localStorage.getItem(PDF_WIDTH_KEY)) || 480;
-    } catch {
-      return 480;
-    }
-  });
-  const resizePdf = (w: number) => setPdfWidth(Math.round(Math.min(Math.max(w, 200), window.innerWidth - 360)));
-  const savePdfWidth = () => {
-    try {
-      localStorage.setItem(PDF_WIDTH_KEY, String(pdfWidth));
-    } catch {
-      // Width is a convenience only.
-    }
-  };
+  const [pdfWidth, resizePdf, savePdfWidth] = usePaneWidth(PDF_WIDTH_KEY, 480);
+  const [sideWidth, resizeSide, saveSideWidth] = usePaneWidth(SIDE_WIDTH_KEY, 300);
   const saveAsInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(cmd: CommandId) => void>(() => {});
@@ -1273,33 +1262,10 @@ export function App() {
         {pdf && (
           <>
             <aside className="pdfpane" data-testid="pdfpane" aria-label="PDF" style={{ flexBasis: pdfWidth }}>
-              <div className="dict-cap">
-                <span className="pdf-name">{pdf.name}</span>
-                <button type="button" className="pdf-close" aria-label="PDFを閉じる" onClick={() => run("view.pdf")}>
-                  ×
-                </button>
-              </div>
+              <Cap title={pdf.name} label="PDFを閉じる" onClose={() => run("view.pdf")} />
               <iframe src={pdf.url} title={pdf.name} />
             </aside>
-            <div
-              className="splitter"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="PDFの幅"
-              aria-valuenow={pdfWidth}
-              tabIndex={0}
-              data-testid="pdf-splitter"
-              onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
-              onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && resizePdf(e.clientX)}
-              onPointerUp={savePdfWidth}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                  e.preventDefault();
-                  resizePdf(pdfWidth + (e.key === "ArrowRight" ? 40 : -40));
-                }
-              }}
-              onKeyUp={savePdfWidth}
-            />
+            <Splitter edge="left" width={pdfWidth} resize={resizePdf} save={savePdfWidth} label="PDFの幅" testId="pdf-splitter" />
           </>
         )}
         <div className="desk">
@@ -1312,25 +1278,29 @@ export function App() {
           />
         </div>
         {(dictOpen || trOpen || notesOpen) && (
-          <div className="side">
-            {dictOpen && <Dict seed={dictSeed} />}
-            {trOpen && <Translate seed={trSeed} />}
-            {notesOpen && (
-              <Notes
-                notes={notes}
-                text={text}
-                onPick={(n) => {
-                  const at = place(textRef.current, n);
-                  if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
-                }}
-                onApply={(n) => {
-                  applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
-                  setNotes((list) => list.filter((x) => x.id !== n.id));
-                }}
-                onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
-              />
-            )}
-          </div>
+          <>
+            <Splitter edge="right" width={sideWidth} resize={resizeSide} save={saveSideWidth} label="パネルの幅" testId="side-splitter" />
+            <div className="side" style={{ flexBasis: sideWidth }}>
+              {dictOpen && <Dict seed={dictSeed} onClose={() => setDictOpen(false)} />}
+              {trOpen && <Translate seed={trSeed} onClose={() => setTrOpen(false)} />}
+              {notesOpen && (
+                <Notes
+                  notes={notes}
+                  text={text}
+                  onPick={(n) => {
+                    const at = place(textRef.current, n);
+                    if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
+                  }}
+                  onApply={(n) => {
+                    applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
+                    setNotes((list) => list.filter((x) => x.id !== n.id));
+                  }}
+                  onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
+              onClose={() => setNotesOpen(false)}
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
 

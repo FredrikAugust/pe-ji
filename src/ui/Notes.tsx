@@ -1,4 +1,5 @@
 import { place, type Note } from "../lib/notes";
+import { Cap } from "./Pane";
 
 export function Notes(props: {
   notes: Note[];
@@ -6,10 +7,11 @@ export function Notes(props: {
   onPick: (note: Note) => void;
   onApply: (note: Note) => void;
   onRemove: (id: string) => void;
+  onClose: () => void;
 }) {
   return (
     <aside className="dict" aria-label="メモ・訂正" data-testid="notes">
-      <div className="dict-cap">メモ・訂正（AI）</div>
+      <Cap title="メモ・訂正（AI）" label="メモを閉じる" onClose={props.onClose} />
       <div className="dict-body">
         {props.notes.length === 0 && <p className="dict-note">まだありません。AI と接続すると、ここに届きます。</p>}
         {props.notes.map((n) => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MAX_QUERY, jishoUrl, lookup, type Entry } from "../lib/dict";
 import { isTauri } from "../lib/files";
 import { align } from "../lib/furigana";
+import { Cap } from "./Pane";
 
 /** Headword with the reading over its kanji only. */
 function Head({ word, reading }: Entry) {
@@ -22,7 +23,7 @@ function openJisho(e: React.MouseEvent, url: string) {
   void import("@tauri-apps/api/core").then(({ invoke }) => invoke("open_jisho", { url }));
 }
 
-export function Dict({ seed }: { seed: { q: string; n: number } | null }) {
+export function Dict({ seed, onClose }: { seed: { q: string; n: number } | null; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Entry[] | null>(null);
   const [state, setState] = useState<"idle" | "busy" | "error">("idle");
@@ -53,7 +54,7 @@ export function Dict({ seed }: { seed: { q: string; n: number } | null }) {
 
   return (
     <aside className="dict" aria-label="辞書" data-testid="dict">
-      <div className="dict-cap">ことばサーチ − Jisho.org</div>
+      <Cap title="ことばサーチ − Jisho.org" label="辞書を閉じる" onClose={onClose} />
       <form
         className="search-row"
         onSubmit={(e) => {

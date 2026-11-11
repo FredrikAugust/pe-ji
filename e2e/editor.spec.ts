@@ -641,3 +641,25 @@ test("readings are never part of a selection @webkit", async ({ page }) => {
   expect(sel).toContain("昨日の日記");
   expect(sel).not.toContain("きのう");
 });
+
+test("side panes close with × and the side column resizes", async ({ page }) => {
+  await page.getByTestId("btn-translate").click();
+  await page.getByTestId("btn-notes").click();
+  for (const id of ["dict", "translate", "notes"]) await expect(page.getByTestId(id)).toBeVisible();
+
+  const side = page.locator(".side");
+  const s = (await page.getByTestId("side-splitter").boundingBox())!;
+  const vw = page.viewportSize()!.width;
+  await page.mouse.move(s.x + 3, s.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(vw - 420, s.y + 100, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => Math.round((await side.boundingBox())!.width)).toBe(420);
+
+  await page.getByRole("button", { name: "翻訳を閉じる" }).click();
+  await expect(page.getByTestId("translate")).toHaveCount(0);
+  await page.getByRole("button", { name: "辞書を閉じる" }).click();
+  await page.getByRole("button", { name: "メモを閉じる" }).click();
+  await expect(side).toHaveCount(0);
+  await expect(page.getByTestId("side-splitter")).toHaveCount(0);
+});

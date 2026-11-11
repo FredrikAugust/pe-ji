@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { saveKey, translate } from "../lib/translate";
+import { Cap } from "./Pane";
 
 const ERRORS: Record<string, string> = {
   NO_KEY: "DeepL の API キーを入れてください",
@@ -8,7 +9,7 @@ const ERRORS: Record<string, string> = {
   DESKTOP_ONLY: "翻訳はデスクトップ版だけです",
 };
 
-export function Translate({ seed }: { seed: { q: string; n: number } | null }) {
+export function Translate({ seed, onClose }: { seed: { q: string; n: number } | null; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [out, setOut] = useState("");
   const [error, setError] = useState("");
@@ -38,7 +39,7 @@ export function Translate({ seed }: { seed: { q: string; n: number } | null }) {
 
   return (
     <aside className="dict" aria-label="翻訳" data-testid="translate">
-      <div className="dict-cap">ほんやく − DeepL</div>
+      <Cap title="ほんやく − DeepL" label="翻訳を閉じる" onClose={onClose} />
       <form
         className="search-row tr-row"
         onSubmit={(e) => {

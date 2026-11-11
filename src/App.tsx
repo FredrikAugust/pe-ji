@@ -724,6 +724,10 @@ export function App() {
   useEffect(() => {
     const el = pageRef.current?.element;
     if (!el || typeof Highlight === "undefined") return;
+    if (!notes.length) {
+      CSS.highlights.delete("pico-note");
+      return;
+    }
     let frame = 0;
     const paint = () => {
       cancelAnimationFrame(frame);
@@ -1255,22 +1259,26 @@ export function App() {
             onKind={setKind}
           />
         </div>
-        {dictOpen && <Dict seed={dictSeed} />}
-        {trOpen && <Translate seed={trSeed} />}
-        {notesOpen && (
-          <Notes
-            notes={notes}
-            text={text}
-            onPick={(n) => {
-              const at = place(textRef.current, n);
-              if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
-            }}
-            onApply={(n) => {
-              applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
-              setNotes((list) => list.filter((x) => x.id !== n.id));
-            }}
-            onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
-          />
+        {(dictOpen || trOpen || notesOpen) && (
+          <div className="side">
+            {dictOpen && <Dict seed={dictSeed} />}
+            {trOpen && <Translate seed={trSeed} />}
+            {notesOpen && (
+              <Notes
+                notes={notes}
+                text={text}
+                onPick={(n) => {
+                  const at = place(textRef.current, n);
+                  if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
+                }}
+                onApply={(n) => {
+                  applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
+                  setNotes((list) => list.filter((x) => x.id !== n.id));
+                }}
+                onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
+              />
+            )}
+          </div>
         )}
       </div>
 

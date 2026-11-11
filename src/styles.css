@@ -1,6 +1,14 @@
+/* Latin letters get a Latin font. The faces cover Latin only, so dashes, ellipses,
+   kana and kanji fall through to the Japanese font next in the stack. */
+@font-face { font-family: "Pico Latin UI"; src: local("Tahoma"), local("Verdana"), local("DejaVu Sans"); unicode-range: U+0020-007E, U+00A0-024F, U+2018-201D, U+20AC; }
+@font-face { font-family: "Pico Latin UI"; font-weight: 700; src: local("Tahoma Bold"), local("Tahoma-Bold"), local("Verdana Bold"), local("DejaVu Sans Bold"); unicode-range: U+0020-007E, U+00A0-024F, U+2018-201D, U+20AC; }
+@font-face { font-family: "Pico Latin"; src: local("Helvetica Neue"), local("HelveticaNeue"), local("Arial"); unicode-range: U+0020-007E, U+00A0-024F, U+2018-201D, U+20AC; }
+@font-face { font-family: "Pico Latin"; font-weight: 700; src: local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"), local("Arial Bold"); unicode-range: U+0020-007E, U+00A0-024F, U+2018-201D, U+20AC; }
+@font-face { font-family: "Pico Latin"; font-style: italic; src: local("Helvetica Neue Italic"), local("HelveticaNeue-Italic"), local("Arial Italic"); unicode-range: U+0020-007E, U+00A0-024F, U+2018-201D, U+20AC; }
+
 :root {
-  --chrome: "DotGothic16", "MS Gothic", "Hiragino Maru Gothic ProN", sans-serif;
-  --doc: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", sans-serif;
+  --chrome: "Pico Latin UI", "DotGothic16", "MS Gothic", "Hiragino Maru Gothic ProN", sans-serif;
+  --doc: "Pico Latin", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", sans-serif;
   --gray: #c0c0c0;
   --dark: #808080;
   --navy: #000080;
@@ -219,7 +227,8 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   vertical-align: top;
 }
 
-.page ruby { ruby-position: over; }
+/* center: a long reading must not spread the kanji under it apart (勉 強). */
+.page ruby { ruby-position: over; ruby-align: center; }
 .page rt {
   font-size: 0.5em;
   color: var(--rt);
@@ -242,11 +251,20 @@ input, textarea, select { background: var(--field); color: var(--ink); }
 
 /* Dictionary */
 
-.dict {
-  flex: 0 0 280px;
+/* Side panels share one column, stacked, so opening several never squeezes the page. */
+.side {
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   border-left: 1px solid var(--lo);
+}
+.side > .dict + .dict { border-top: 1px solid var(--lo); }
+
+.dict {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   font-size: 14px;
 }
@@ -418,12 +436,15 @@ code { font-family: var(--doc); background: var(--field); padding: 0 4px; border
 }
 
 @media (max-width: 900px) {
-  .dict { display: none; }
+  .side { display: none; }
 }
+
+@page { margin: 20mm 18mm; }
 
 @media print {
   html, body, #root, .app { height: auto; background: #fff; }
-  .menubar, .tb, .dict, .pdfpane, .splitter, .status, .overlay { display: none; }
+  ::highlight(pico-note) { background-color: transparent; text-decoration: none; }
+  .menubar, .tb, .side, .pdfpane, .splitter, .status, .overlay { display: none; }
   .desk { overflow: visible; padding: 0; background: #fff; }
   .page { max-width: none; border: 0; padding: 0; }
 }

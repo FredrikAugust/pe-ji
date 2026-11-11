@@ -1,6 +1,6 @@
 fn main() {
     // `generate_context!` requires the frontend dist path to exist at compile time.
-    // A placeholder is enough for `cargo test`; `npm run build` replaces it.
+    // A placeholder is enough for `cargo test`; `pnpm build` replaces it.
     let dist = std::path::Path::new("../dist");
     if !dist.join("index.html").exists() {
         std::fs::create_dir_all(dist).expect("create dist");

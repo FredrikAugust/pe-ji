@@ -54,15 +54,15 @@ Furigana cycles **表示 → 非表示 → ホバー**. Hover keeps the furigana
 
 ## Develop
 
-Requirements: Node.js 22+, Rust **1.90+** (Tauri 2.12), and a WebKitGTK 4.1 toolchain on Linux.
+Requirements: Node.js 22+, pnpm 10.33.4 (`packageManager` in `package.json`; Corepack picks it up), Rust **1.90+** (Tauri 2.12), and a WebKitGTK 4.1 toolchain on Linux.
 
 ### Linux
 
 ```bash
 sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
   libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config
-npm install
-npm run tauri:dev
+pnpm install
+pnpm tauri:dev
 ```
 
 ### macOS
@@ -70,8 +70,8 @@ npm run tauri:dev
 Install Xcode command line tools, Rust, and Node. Then:
 
 ```bash
-npm install
-npm run tauri:dev
+pnpm install
+pnpm tauri:dev
 ```
 
 The dev server is Vite on `http://127.0.0.1:43123`. You can open that URL without the Tauri shell; open/save then uses a file input and a download. Inside the desktop shell, open/save uses native dialogs and writes UTF-8 (BOM stripped on read, atomic replace on write).
@@ -79,7 +79,7 @@ The dev server is Vite on `http://127.0.0.1:43123`. You can open that URL withou
 ### Build
 
 ```bash
-npm run tauri:build
+pnpm tauri:build
 ```
 
 Artifacts land in `src-tauri/target/release/bundle/`.
@@ -101,12 +101,12 @@ The macOS app is unsigned. The first launch is Right Click → Open. Linux and W
 
 ```bash
 cargo test          # parser fixtures + UTF-8 file IO
-npm test            # keymap, ruby insert, navigation
-npm run e2e         # Playwright against the real UI
-npm run check       # all three
+pnpm test           # keymap, ruby insert, navigation
+pnpm e2e            # Playwright against the real UI
+pnpm check          # all three
 ```
 
-`npm run e2e` covers every binding above, the three furigana modes (including hover), open/save/save-as, the dirty-close confirm, and an IME simulation (`compositionstart` suppresses Ctrl+S). A full OS IME is not available to headless Chromium; the guard itself is also unit-tested. The Tauri window itself is not driven by tauri-driver here.
+`pnpm e2e` covers every binding above, the three furigana modes (including hover), open/save/save-as, the dirty-close confirm, and an IME simulation (`compositionstart` suppresses Ctrl+S). A full OS IME is not available to headless Chromium; the guard itself is also unit-tested. The Tauri window itself is not driven by tauri-driver here.
 
 ## Roadmap
 

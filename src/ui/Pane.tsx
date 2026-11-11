@@ -46,7 +46,11 @@ export function Splitter(props: { edge: "left" | "right"; width: number; resize:
       aria-valuenow={width}
       tabIndex={0}
       data-testid={props.testId}
-      onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+      onPointerDown={(e) => {
+        // No text selection may start under a drag (it swept across the PDF and the page).
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
       onPointerMove={(e) => {
         if (e.currentTarget.hasPointerCapture(e.pointerId)) resize(edge === "left" ? e.clientX : window.innerWidth - e.clientX);
       }}

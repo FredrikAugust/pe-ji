@@ -1,6 +1,6 @@
 /**
  * DeepL translation through Rust (the key never reaches the web view).
- * Japanese goes to English, anything else to Japanese. One promise per text for the session.
+ * Only Japanese → English or English → Japanese. One promise per text and direction for the session.
  */
 
 import { isTauri } from "./files";
@@ -10,7 +10,9 @@ type Call = (text: string, target: string) => Promise<string>;
 
 const memo = new Map<string, Promise<Translation>>();
 
-export const targetFor = (text: string) => (/[぀-ヿ㐀-鿿]/.test(text) ? "EN-US" : "JA");
+export type Target = "EN-US" | "JA";
+
+export const targetFor = (text: string): Target => (/[぀-ヿ㐀-鿿]/.test(text) ? "EN-US" : "JA");
 
 /** Tests set `window.__picoTranslate`; the desktop app asks Rust. */
 async function call(text: string, target: string): Promise<string> {
@@ -21,11 +23,11 @@ async function call(text: string, target: string): Promise<string> {
   return invoke<string>("translate", { text, target });
 }
 
-export function translate(text: string): Promise<Translation> {
-  const key = text.trim();
+export function translate(text: string, target: Target): Promise<Translation> {
+  const key = `${target}\n${text.trim()}`;
   let hit = memo.get(key);
   if (!hit) {
-    hit = call(key, targetFor(key)).then((raw) => {
+    hit = call(text.trim(), target).then((raw) => {
       const t = (JSON.parse(raw) as { translations: { text: string; detected_source_language: string }[] }).translations[0];
       return { text: t.text, from: t.detected_source_language };
     });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { saveKey, translate } from "../lib/translate";
+import { saveKey, targetFor, translate, type Target } from "../lib/translate";
 import { Cap } from "./Pane";
 
 const ERRORS: Record<string, string> = {
@@ -9,19 +9,34 @@ const ERRORS: Record<string, string> = {
   DESKTOP_ONLY: "翻訳はデスクトップ版だけです",
 };
 
+const TO_KEY = "pico.translateTo";
+
 export function Translate({ seed, onClose }: { seed: { q: string; n: number } | null; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [out, setOut] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState("");
+  const [to, setTo] = useState<Target>(() => {
+    try {
+      return localStorage.getItem(TO_KEY) === "JA" ? "JA" : "EN-US";
+    } catch {
+      return "EN-US";
+    }
+  });
+  const pick = (t: Target) => {
+    setTo(t);
+    try {
+      localStorage.setItem(TO_KEY, t);
+    } catch {}
+  };
 
-  const run = async (text: string) => {
+  const run = async (text: string, target = to) => {
     if (!text.trim()) return;
     setBusy(true);
     setError("");
     try {
-      setOut((await translate(text)).text);
+      setOut((await translate(text, target)).text);
     } catch (e) {
       const code = String(e).replace(/^Error: /, "");
       setOut("");
@@ -33,8 +48,10 @@ export function Translate({ seed, onClose }: { seed: { q: string; n: number } | 
 
   useEffect(() => {
     if (!seed) return;
+    const t = targetFor(seed.q);
+    pick(t);
     setQ(seed.q);
-    void run(seed.q);
+    void run(seed.q, t);
   }, [seed]);
 
   return (
@@ -48,9 +65,24 @@ export function Translate({ seed, onClose }: { seed: { q: string; n: number } | 
         }}
       >
         <textarea data-testid="translate-input" value={q} lang="ja" rows={4} onChange={(e) => setQ(e.target.value)} />
-        <button type="submit" className="tbtn">
-          翻訳
-        </button>
+        <div className="tr-buttons">
+          <button
+            type="button"
+            className="tbtn"
+            data-testid="translate-direction"
+            title="方向を切り替える"
+            onClick={() => {
+              const t = to === "JA" ? "EN-US" : "JA";
+              pick(t);
+              void run(q, t);
+            }}
+          >
+            {to === "JA" ? "英→日" : "日→英"}
+          </button>
+          <button type="submit" className="tbtn">
+            翻訳
+          </button>
+        </div>
       </form>
       <div className="dict-body" data-testid="translate-result" aria-live="polite">
         {busy && <p className="dict-note">翻訳中…</p>}

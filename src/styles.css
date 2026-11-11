@@ -331,7 +331,7 @@ input, textarea, select { background: var(--field); color: var(--ink); }
 
 .tr-row { flex-direction: column; }
 .tr-row textarea { font-family: var(--doc); font-size: 14px; resize: vertical; border: 2px solid; border-color: var(--lo) var(--hi) var(--hi) var(--lo); padding: 4px 6px; }
-.tr-row .tbtn { align-self: flex-end; }
+.tr-buttons { display: flex; gap: 4px; justify-content: flex-end; }
 .tr-out { font-family: var(--doc); font-size: 15px; line-height: 1.6; white-space: pre-wrap; user-select: text; }
 .search-row input[type="password"] { font-family: var(--chrome); }
 

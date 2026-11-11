@@ -138,10 +138,16 @@ fn has_deepl_key(app: tauri::AppHandle) -> bool {
 /// Raw DeepL JSON for one text. Free keys (ending in `:fx`) use the free endpoint.
 #[tauri::command]
 async fn translate(app: tauri::AppHandle, text: String, target: String) -> Result<String, String> {
+    // Only Japanese ↔ English, with the source fixed so DeepL never guesses.
+    let source = match target.as_str() {
+        "EN-US" => "JA",
+        "JA" => "EN",
+        _ => return Err(format!("unsupported target {target}")),
+    };
     let key = fs::read_to_string(deepl_key_file(&app)?).map_err(|_| "NO_KEY".to_string())?;
     let key = key.trim();
     let host = if key.ends_with(":fx") { "api-free.deepl.com" } else { "api.deepl.com" };
-    let body = serde_json::json!({ "text": [text], "target_lang": target });
+    let body = serde_json::json!({ "text": [text], "source_lang": source, "target_lang": target });
     let res = reqwest::Client::new()
         .post(format!("https://{host}/v2/translate"))
         .header("Authorization", format!("DeepL-Auth-Key {key}"))

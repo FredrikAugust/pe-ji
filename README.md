@@ -56,6 +56,8 @@ Furigana cycles **表示 → 非表示 → ホバー**. Hover keeps the furigana
 
 Requirements: Node.js 22+, pnpm 10.33.4 (`packageManager` in `package.json`; Corepack picks it up), Rust **1.90+** (Tauri 2.12), and a WebKitGTK 4.1 toolchain on Linux.
 
+pnpm only installs versions that have been on the registry for at least 7 days (`.npmrc`). That matches Aikido's cooldown. The `vite` and `@playwright/test` ranges include a release from before that window.
+
 ### Linux
 
 ```bash

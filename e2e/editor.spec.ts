@@ -521,7 +521,7 @@ test("opens a PDF beside the page and closes it", async ({ page }) => {
   await expect(pane).toHaveCount(0);
 });
 
-test("translates the caret's line with Ctrl+T and asks for a key when there is none", async ({ page }) => {
+test("Ctrl+T translates the selection, opens an empty box without one, and asks for a key", async ({ page }) => {
   await page.evaluate(() => {
     const w = window as unknown as { __picoTranslate: unknown; calls: string[] };
     w.calls = [];
@@ -532,20 +532,27 @@ test("translates the caret's line with Ctrl+T and asks for a key when there is n
     };
   });
   await setDoc(page, "- 昨日《きのう》勉強した。\n鍵");
+  const calls = () => page.evaluate(() => (window as unknown as { calls: string[] }).calls);
   await placeCaret(page, "勉強");
+  await chord(page, "t", { ctrl: true });
+  await expect(page.getByTestId("translate-input")).toBeFocused();
+  await expect(page.getByTestId("translate-input")).toHaveValue("");
+  expect(await calls()).toEqual([]);
+
+  await placeCaret(page, "勉強した。", "select");
   await chord(page, "t", { ctrl: true });
   await expect(page.getByTestId("translate-result")).toHaveText("I studied yesterday.");
   await chord(page, "t", { ctrl: true });
-  expect(await page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual(["EN-US:昨日勉強した。"]);
+  expect(await calls()).toEqual(["EN-US:勉強した。"]);
 
   // One button flips JP→EN to EN→JP and translates the same text again.
   const dir = page.getByTestId("translate-direction");
   await expect(dir).toHaveText("日→英");
   await dir.click();
   await expect(dir).toHaveText("英→日");
-  await expect.poll(() => page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual(["EN-US:昨日勉強した。", "JA:昨日勉強した。"]);
+  await expect.poll(calls).toEqual(["EN-US:勉強した。", "JA:勉強した。"]);
 
-  await placeCaret(page, "鍵");
+  await placeCaret(page, "鍵", "select");
   await chord(page, "t", { ctrl: true });
   await expect(page.getByTestId("translate-result")).toContainText("API キー");
   await expect(page.getByTestId("deepl-key")).toBeVisible();

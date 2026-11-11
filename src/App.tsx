@@ -504,14 +504,8 @@ export function App() {
           setTrOpen((open) => !open);
           break;
         case "translate.selection": {
-          let q = pageRef.current?.selection()?.base.trim() ?? "";
-          if (!q) {
-            // Nothing selected: the caret's line, readings left out.
-            const node = window.getSelection()?.anchorNode;
-            const line = (node instanceof Element ? node : node?.parentElement)?.closest(".ln")?.cloneNode(true) as HTMLElement | undefined;
-            line?.querySelectorAll("rt, rp, .nt").forEach((n) => n.remove());
-            q = line?.textContent?.trim() ?? "";
-          }
+          // Nothing selected: the pane opens with its box focused, nothing is translated.
+          const q = pageRef.current?.selection()?.base.trim() ?? "";
           setTrOpen(true);
           setTrSeed((prev) => ({ q, n: (prev?.n ?? 0) + 1 }));
           break;

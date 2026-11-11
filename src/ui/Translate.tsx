@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { saveKey, targetFor, translate, type Target } from "../lib/translate";
 import { Cap } from "./Pane";
 
@@ -17,6 +17,7 @@ export function Translate({ seed, onClose }: { seed: { q: string; n: number } | 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [to, setTo] = useState<Target>(() => {
     try {
       return localStorage.getItem(TO_KEY) === "JA" ? "JA" : "EN-US";
@@ -48,6 +49,10 @@ export function Translate({ seed, onClose }: { seed: { q: string; n: number } | 
 
   useEffect(() => {
     if (!seed) return;
+    if (!seed.q) {
+      inputRef.current?.focus();
+      return;
+    }
     const t = targetFor(seed.q);
     pick(t);
     setQ(seed.q);
@@ -64,7 +69,7 @@ export function Translate({ seed, onClose }: { seed: { q: string; n: number } | 
           void run(q);
         }}
       >
-        <textarea data-testid="translate-input" value={q} lang="ja" rows={4} onChange={(e) => setQ(e.target.value)} />
+        <textarea ref={inputRef} data-testid="translate-input" value={q} lang="ja" rows={4} onChange={(e) => setQ(e.target.value)} />
         <div className="tr-buttons">
           <button
             type="button"

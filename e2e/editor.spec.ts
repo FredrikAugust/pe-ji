@@ -55,6 +55,8 @@ test.beforeEach(async ({ page }) => {
   // No test reaches Jisho, DeepL or anything else off this machine; tests that need Jisho mock it on top.
   await page.route(/^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto("/");
+  await expect(page).toHaveTitle("pe-ji");
+  await page.getByTestId("welcome").getByRole("button", { name: "サンプルを開く" }).click();
   await expect(page.getByTestId("app")).toHaveAttribute("data-furigana-mode", "show");
   await expect(page.getByTestId("editor").locator("ruby").first()).toBeVisible();
 });
@@ -662,4 +664,30 @@ test("side panes close with × and the side column resizes", async ({ page }) =>
   await page.getByRole("button", { name: "メモを閉じる" }).click();
   await expect(side).toHaveCount(0);
   await expect(page.getByTestId("side-splitter")).toHaveCount(0);
+});
+
+test("starts on a welcome screen with recent files and keyboard control", async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem("pico.recent", JSON.stringify(["/Users/me/Documents/日記.txt", "/Users/me/宿題.md"])));
+  await page.reload();
+  const welcome = page.getByTestId("welcome");
+  await expect(page).toHaveTitle("pe-ji");
+  await expect(page.getByTestId("editor")).toHaveCount(0);
+  await expect(welcome).toContainText("日記.txt");
+  await expect(welcome).toContainText("~/Documents/");
+
+  // The newest recent file has focus; arrows move, Enter opens.
+  await expect(welcome.getByRole("button", { name: /日記\.txt/ })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(welcome.getByRole("button", { name: /宿題\.md/ })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(welcome.getByRole("button", { name: "新しいページ" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("editor")).toBeFocused();
+  await expect(page).toHaveTitle("無題.txt — pe-ji");
+
+  // 1–9 open a recent file (the browser build cannot read paths, so it reports why).
+  await page.reload();
+  await expect(welcome.getByRole("button", { name: /日記\.txt/ })).toBeFocused();
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("status-message")).toContainText("開けませんでした");
 });

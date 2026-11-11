@@ -57,6 +57,7 @@ import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
 import { Notes } from "./ui/Notes";
 import { Cap, Splitter, usePaneWidth } from "./ui/Pane";
+import { Welcome } from "./ui/Welcome";
 import { place, type Note } from "./lib/notes";
 import { connectRelay, type RelayStatus } from "./lib/relay";
 import { Page, type PageHandle } from "./ui/Page";
@@ -82,10 +83,12 @@ export function App() {
       ? "other"
       : detectPlatform(navigator.platform, navigator.userAgent);
 
-  const [text, setText] = useState(SAMPLE);
-  const [doc, setDoc] = useState({ text: SAMPLE });
-  const [saved, setSaved] = useState(SAMPLE);
-  const [filename, setFilename] = useState(SAMPLE_NAME);
+  // The app starts on the welcome screen with an empty, unnamed document behind it.
+  const [welcome, setWelcome] = useState(true);
+  const [text, setText] = useState("");
+  const [doc, setDoc] = useState({ text: "" });
+  const [saved, setSaved] = useState("");
+  const [filename, setFilename] = useState(UNTITLED_NAME);
   const [path, setPath] = useState<string | null>(null);
   const [furi, setFuri] = useState<FuriMode>(() => {
     try {
@@ -188,7 +191,11 @@ export function App() {
   menuIndexRef.current = menuIndex;
 
   const dirty = isDirty(text, saved);
-  const title = formatTitle(filename, dirty);
+  const title = welcome ? "pe-ji" : formatTitle(filename, dirty);
+  // The page mounts when the welcome screen goes away; put the caret in it.
+  useEffect(() => {
+    if (!welcome) pageRef.current?.focus();
+  }, [welcome]);
 
   const flash = useCallback((message: string) => {
     setStatus(message);
@@ -206,6 +213,7 @@ export function App() {
       setPath(nextPath);
       setOverlay("none");
       setOpenMenu(null);
+      setWelcome(false);
       flash(message);
       queueMicrotask(() => pageRef.current?.focus());
     },
@@ -311,13 +319,19 @@ export function App() {
 
   const openPath = useCallback(
     async (path: string) => {
+      let bytes: ArrayBuffer;
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        const bytes = await invoke<ArrayBuffer>("read_document", { path });
+        bytes = await invoke<ArrayBuffer>("read_document", { path });
+      } catch (err) {
+        flash(`開けませんでした：${String(err)}`);
+        return;
+      }
+      try {
         loadDoc(decodeText(new Uint8Array(bytes)), basename(path), path, "開きました");
         remember(path);
-      } catch (err) {
-        flash(err instanceof TypeError ? "UTF-8 でも Shift_JIS でもありません" : `開けませんでした：${String(err)}`);
+      } catch {
+        flash("UTF-8 でも Shift_JIS でもありません");
       }
     },
     [flash, loadDoc, remember],
@@ -1268,6 +1282,17 @@ export function App() {
             <Splitter edge="left" width={pdfWidth} resize={resizePdf} save={savePdfWidth} label="PDFの幅" testId="pdf-splitter" />
           </>
         )}
+        {welcome ? (
+          <Welcome
+            recent={recent}
+            newKey={shortcutFor("file.new", platform)}
+            openKey={shortcutFor("file.open", platform)}
+            onNew={() => run("file.new")}
+            onOpen={() => run("file.open")}
+            onSample={() => run("file.sample")}
+            onRecent={(path) => void openPath(path)}
+          />
+        ) : (
         <div className="desk">
           <Page ref={pageRef} doc={doc} empty={text.length === 0}
             furi={furi}
@@ -1277,6 +1302,7 @@ export function App() {
             onKind={setKind}
           />
         </div>
+        )}
         {(dictOpen || trOpen || notesOpen) && (
           <>
             <Splitter edge="right" width={sideWidth} resize={resizeSide} save={saveSideWidth} label="パネルの幅" testId="side-splitter" />

@@ -6,7 +6,7 @@ Repository: [FredrikAugust/pe-ji](https://github.com/FredrikAugust/pe-ji). Devel
 
 It has the page, automatic furigana in three modes, a Jisho dictionary panel, a PDF viewer beside the page, Aozora Bunko files, open/save, Open Recent, and PDF export (print to PDF).
 
-The window has no OS frame; drag it by the menu bar or toolbar. The menus are mirrored into the macOS menu bar, and right-click opens a native menu. The colors follow the system light or dark appearance. Drop a `.txt` or `.md` on the window to edit it, or a PDF to read it in the resizable pane left of the page (宿題PDF). Chrome uses the bundled [DotGothic16](https://fonts.google.com/specimen/DotGothic16) pixel font. The document itself uses bundled [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP) so the writing stays easy to read. Nothing is loaded from a CDN at runtime.
+It opens on a welcome screen: new page, open, the sample, and your recent files (↑↓ and Enter, or 1–9). The window has no OS frame; drag it by the menu bar or toolbar. The menus are mirrored into the macOS menu bar, and right-click opens a native menu. The colors follow the system light or dark appearance. Drop a `.txt` or `.md` on the window to edit it, or a PDF to read it in the resizable pane left of the page (宿題PDF). Chrome uses the bundled [DotGothic16](https://fonts.google.com/specimen/DotGothic16) pixel font. The document itself uses bundled [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP) so the writing stays easy to read. Nothing is loaded from a CDN at runtime.
 
 ## Markup
 

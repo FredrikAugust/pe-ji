@@ -252,6 +252,17 @@ input, textarea, select { background: var(--field); color: var(--ink); }
 .dot-tri { -webkit-text-emphasis: filled triangle; text-emphasis: filled triangle; }
 .dot-open-tri { -webkit-text-emphasis: open triangle; text-emphasis: open triangle; }
 
+/* Welcome */
+
+.welcome { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 16px; background: var(--desk); }
+.welcome-box { width: min(560px, 100%); }
+.welcome .mi { padding: 5px 10px; font-size: 15px; }
+.welcome .mi:focus { background: var(--navy); color: #fff; outline: none; }
+.welcome .mi:focus .shortcut { color: #fff; }
+.recent-name { display: flex; align-items: baseline; gap: 10px; min-width: 0; font-family: var(--doc); }
+.recent-dir { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome .mi:focus .recent-dir { color: #c8c8ff; }
+
 /* Dictionary */
 
 /* Side panels share one column, stacked, so opening several never squeezes the page. */

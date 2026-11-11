@@ -157,6 +157,7 @@ pub fn handle(msg: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Option<Va
 const INSTRUCTIONS: &str = "This is pe-ji, a small Japanese word processor for a learner. \
 Read the document, then leave notes or corrections on exact quotes from it. \
 Prefer add_note with kind \"correction\" and a suggestion over replace_text, so the learner decides. \
+Use insert_text to add new text when asked. \
 Write comments in simple English unless asked otherwise.";
 
 const MARKUP: &str = "The text is the file's source: `# `/`## `/`### ` headings, `- ` bullets, leading tabs for indent, \
@@ -210,6 +211,15 @@ fn tools() -> Value {
             },
             "annotations": { "destructiveHint": true },
         },
+        {
+            "name": "insert_text",
+            "description": "Insert text into the document: right after the quote `after`, right before the quote `before`, or at the end when neither is given. Include any line breaks (\\n) yourself. The learner can undo it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "text": { "type": "string" }, "after": quote, "before": quote, "occurrence": occurrence },
+                "required": ["text"],
+            },
+        },
     ])
 }
 
@@ -250,6 +260,21 @@ fn call(name: &str, args: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Re
             let replacement = str_arg("replacement").ok_or("replacement is required")?;
             emit("mcp-replace", json!({ "source": source, "at": at, "replacement": replacement }));
             Ok("replaced".into())
+        }
+        // An insert is a replace of the anchor quote with itself plus the text, or of "" at the end.
+        "insert_text" => {
+            let text = str_arg("text").filter(|t| !t.is_empty()).ok_or("text is required")?;
+            let (source, at, replacement) = if args["after"].is_string() {
+                let (_, source, at) = find(&str_arg("after"))?;
+                (source.clone(), at, source + &text)
+            } else if args["before"].is_string() {
+                let (_, source, at) = find(&str_arg("before"))?;
+                (source.clone(), at, text + &source)
+            } else {
+                (String::new(), doc.text.encode_utf16().count(), text)
+            };
+            emit("mcp-replace", json!({ "source": source, "at": at, "replacement": replacement }));
+            Ok("inserted".into())
         }
         _ => Err(format!("unknown tool {name}")),
     }
@@ -320,7 +345,7 @@ mod tests {
 
         let (init, _) = rpc(&state, "initialize", json!({ "protocolVersion": "2025-03-26" }));
         assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
-        assert_eq!(rpc(&state, "tools/list", json!({})).0["result"]["tools"].as_array().unwrap().len(), 5);
+        assert_eq!(rpc(&state, "tools/list", json!({})).0["result"]["tools"].as_array().unwrap().len(), 6);
 
         let (read, _) = rpc(&state, "tools/call", json!({ "name": "read_document", "arguments": {} }));
         assert!(read["result"]["content"][0]["text"].as_str().unwrap().contains("学校"));
@@ -335,6 +360,11 @@ mod tests {
         assert_eq!(events[0].0, "mcp-note");
         assert_eq!(events[0].1["suggestion"], "行った");
         assert_eq!((events[0].1["source"].as_str(), events[0].1["at"].as_u64()), (Some("行きました"), Some(6)));
+
+        let ins = |args: Value| rpc(&state, "tools/call", json!({ "name": "insert_text", "arguments": args })).1[0].1.clone();
+        assert_eq!(ins(json!({ "text": "楽しかった。", "after": "行きました。" })), json!({ "source": "行きました。", "at": 6, "replacement": "行きました。楽しかった。" }));
+        assert_eq!(ins(json!({ "text": "今日、", "before": "学校" }))["replacement"], "今日、学校");
+        assert_eq!(ins(json!({ "text": "\n終わり" })), json!({ "source": "", "at": 12, "replacement": "\n終わり" }));
 
         assert!(handle(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), &state, &|_, _| {}).is_none());
         assert_eq!(rpc(&state, "nope", json!({})).0["error"]["code"], -32601);

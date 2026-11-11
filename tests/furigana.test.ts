@@ -52,5 +52,7 @@ describe("notes", () => {
     expect(place("あいう学校です。学校", note("学校", 3))).toBe(3);
     expect(place("学校です。学校", note("学校", 6))).toBe(5);
     expect(place("です。", note("学校", 0))).toBe(-1);
+    expect(place("です。", note("", 3))).toBe(3);
+    expect(place("です。", note("", 99))).toBe(3);
   });
 });

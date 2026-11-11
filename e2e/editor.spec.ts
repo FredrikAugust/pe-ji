@@ -586,6 +586,16 @@ test("a correction on a word with a reading in the file replaces the reading too
   await expect(panel.getByTestId("note")).toHaveCount(0);
 });
 
+test("the AI can insert text after a quote or at the end", async ({ page }) => {
+  await setDoc(page, "昨日は学校に行きました。");
+  const mcp = (event: string, payload: object) =>
+    page.evaluate(([e, p]) => (window as unknown as { __picoMcp: (e: string, p: object) => void }).__picoMcp(e, p), [event, payload] as const);
+  // The payloads Rust's insert_text sends (see mcp.rs tests).
+  await mcp("mcp-replace", { source: "行きました。", at: 6, replacement: "行きました。楽しかった。" });
+  await mcp("mcp-replace", { source: "", at: 18, replacement: "\n終わり" });
+  await expect.poll(() => markup(page)).toBe("昨日は学校に行きました。楽しかった。\n終わり");
+});
+
 async function dropFile(page: Page, name: string, type: string, body: string) {
   await page.evaluate(
     ([name, type, body]) => {

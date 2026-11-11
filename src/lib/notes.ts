@@ -15,6 +15,8 @@ export interface Note {
 
 /** Where the note's quote is now: the match closest to where it was, or -1 once it is gone. */
 export function place(text: string, note: Pick<Note, "quote" | "at">): number {
+  // An empty quote is an insert point (the AI appending); indexOf("") would never move past the end.
+  if (!note.quote) return Math.min(Math.max(note.at, 0), text.length);
   let best = -1;
   for (let i = text.indexOf(note.quote); i >= 0; i = text.indexOf(note.quote, i + 1)) {
     if (best < 0 || Math.abs(i - note.at) < Math.abs(best - note.at)) best = i;

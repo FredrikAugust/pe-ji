@@ -1,3 +1,5 @@
+<p align="center"><img src="src-tauri/icons/icon.png" alt="pe-ji logo: a yellow あ on a blue tile" width="160"></p>
+
 # pe-ji
 
 A small word processor for people learning Japanese. You write on one page with headings, bullets, bold, italic, indents and tables. Furigana sits above the kanji as you edit. The file on disk is still one plain-text file.

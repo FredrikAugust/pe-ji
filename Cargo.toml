@@ -1,3 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["src-tauri"]
+
+# Dependencies (Lindera above all) are ~15x slower unoptimised, which made
+# furigana lag under `tauri dev`. Optimise them even in dev builds; our own
+# crate stays fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 3

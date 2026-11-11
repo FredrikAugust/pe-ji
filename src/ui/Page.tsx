@@ -70,7 +70,8 @@ export const Page = forwardRef<
   const stale = useRef(new Set<HTMLElement>());
   const timer = useRef(0);
 
-  const schedule = (ms = 400) => {
+  // Short enough that readings keep up with typing, long enough to batch a burst of keys.
+  const schedule = (ms = 120) => {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void refreshStale(), ms);
   };

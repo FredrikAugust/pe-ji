@@ -630,3 +630,14 @@ test("Ctrl+A selects everything in the Jisho and translate boxes", async ({ page
     expect(await box.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 6]);
   }
 });
+
+test("readings are never part of a selection @webkit", async ({ page }) => {
+  const box = (await page.getByTestId("editor").boundingBox())!;
+  await page.mouse.move(box.x + 60, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 500, box.y + 330, { steps: 8 });
+  await page.mouse.up();
+  const sel = await page.evaluate(() => getSelection()!.toString());
+  expect(sel).toContain("昨日の日記");
+  expect(sel).not.toContain("きのう");
+});

@@ -20,5 +20,9 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", grepInvert: /@webkit/, use: { ...devices["Desktop Chrome"] } },
+    // The macOS app runs WebKit; tests tagged @webkit cover what only it does differently.
+    { name: "webkit", grep: /@webkit/, use: { ...devices["Desktop Safari"] } },
+  ],
 });

@@ -55,6 +55,7 @@ import type { Kind } from "./lib/parser";
 import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
 import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
+import { PdfView } from "./ui/PdfView";
 import { Notes } from "./ui/Notes";
 import { Cap, Splitter, usePaneWidth } from "./ui/Pane";
 import { Welcome } from "./ui/Welcome";
@@ -163,14 +164,9 @@ export function App() {
   const [relayEpoch, setRelayEpoch] = useState(0);
   const relayFormRef = useRef<HTMLFormElement>(null);
   const [trSeed, setTrSeed] = useState<{ q: string; n: number } | null>(null);
-  const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
+  const [pdf, setPdf] = useState<{ bytes: ArrayBuffer; name: string } | null>(null);
 
-  const showPdf = useCallback((bytes: BlobPart, name: string) => {
-    setPdf((old) => {
-      if (old) URL.revokeObjectURL(old.url);
-      return { url: URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })), name };
-    });
-  }, []);
+  const showPdf = useCallback((bytes: ArrayBuffer, name: string) => setPdf({ bytes, name }), []);
 
   const openPdf = useCallback(async () => {
     if (!isTauri()) {
@@ -509,10 +505,8 @@ export function App() {
           pageRef.current?.edit((t, start) => insertTable(t, start));
           break;
         case "view.pdf":
-          if (pdf) {
-            URL.revokeObjectURL(pdf.url);
-            setPdf(null);
-          } else void openPdf();
+          if (pdf) setPdf(null);
+          else void openPdf();
           break;
         case "dict.toggle":
           setDictOpen((open) => !open);
@@ -1315,7 +1309,7 @@ export function App() {
           <>
             <aside className="pdfpane" data-testid="pdfpane" aria-label="PDF" style={{ flexBasis: pdfWidth }}>
               <Cap title={pdf.name} label="PDFを閉じる" onClose={() => run("view.pdf")} />
-              <iframe src={pdf.url} title={pdf.name} />
+              <PdfView bytes={pdf.bytes} />
             </aside>
             <Splitter edge="left" width={pdfWidth} resize={resizePdf} save={savePdfWidth} label="PDFの幅" testId="pdf-splitter" />
           </>

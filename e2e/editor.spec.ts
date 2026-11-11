@@ -516,9 +516,101 @@ test("opens a PDF beside the page and closes it", async ({ page }) => {
   await chooser.setFiles({ name: "宿題.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") });
   const pane = page.getByTestId("pdfpane");
   await expect(pane).toContainText("宿題.pdf");
-  await expect(pane.locator("iframe")).toHaveAttribute("src", /^blob:/);
   await page.getByRole("button", { name: "PDFを閉じる" }).click();
   await expect(pane).toHaveCount(0);
+});
+
+async function openHomework(page: Page) {
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByTestId("btn-pdfview").click()]);
+  await chooser.setFiles("testdata/homework.pdf");
+  const view = page.getByTestId("pdf-view");
+  await expect(view.locator(".pdf-page")).toHaveCount(2);
+  // Drawn (some dark pixels) and selectable (a text layer with the words).
+  await expect
+    .poll(() =>
+      view.locator("canvas").first().evaluate((c: HTMLCanvasElement) => {
+        const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+        let dark = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] < 128) dark++;
+        return dark;
+      }),
+    )
+    .toBeGreaterThan(500);
+  await expect(view.locator(".textLayer").first()).toContainText("友達と公園を散歩しました。");
+  return view;
+}
+
+const pageWidth = (view: ReturnType<Page["getByTestId"]>) => view.locator(".pdf-page").first().evaluate((el) => el.getBoundingClientRect().width);
+
+test("the PDF draws its pages, keeps text selectable, and pinch-zooms around the pointer", async ({ page }) => {
+  const view = await openHomework(page);
+  const before = await pageWidth(view);
+  const box = (await view.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 200);
+  // A trackpad pinch in Chromium: wheel events with ctrlKey.
+  await page.keyboard.down("Control");
+  for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -20);
+  await expect.poll(() => pageWidth(view)).toBeGreaterThan(before * 2);
+  expect(Number(await view.getAttribute("data-zoom"))).toBeGreaterThan(2);
+  // Zoomed around the pointer: the view scrolled right, not stuck at the left edge.
+  expect(await view.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  // A plain wheel still scrolls.
+  const top = await view.evaluate((el) => el.scrollTop);
+  await page.keyboard.up("Control");
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => view.evaluate((el) => el.scrollTop)).toBeGreaterThan(top);
+});
+
+test("copying from the PDF gives kanji Jisho can find, and dragging the splitter selects nothing", async ({ page }) => {
+  const view = await openHomework(page);
+  const copied = await view.evaluate((el) => {
+    const spans = [...el.querySelectorAll(".textLayer span")];
+    const from = spans.find((s) => s.textContent!.startsWith("昨"))!;
+    const to = spans.find((s) => s.textContent!.includes("散歩"))!;
+    const r = document.createRange();
+    r.setStartBefore(from);
+    r.setEndAfter(to);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(r);
+    let out = "";
+    document.addEventListener("copy", (e) => (out = e.clipboardData!.getData("text/plain")));
+    const e = new ClipboardEvent("copy", { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+    el.dispatchEvent(e);
+    return out;
+  });
+  expect(copied).toContain("昨日、友達と公園を散歩しました。");
+
+  await page.evaluate(() => getSelection()!.removeAllRanges());
+  const s = (await page.getByTestId("pdf-splitter").boundingBox())!;
+  await page.mouse.move(s.x + s.width / 2, s.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(s.x - 150, s.y + 500, { steps: 6 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => getSelection()!.toString())).toBe("");
+});
+
+test("a PDF with a non-embedded Japanese font loads its CMap and shows its text", async ({ page }) => {
+  const cmap = page.waitForRequest(/UniJIS-UCS2-H.*\.bcmap/);
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByTestId("btn-pdfview").click()]);
+  await chooser.setFiles("testdata/cmap.pdf");
+  await cmap;
+  await expect(page.getByTestId("pdf-view").locator(".textLayer")).toContainText("宿題です");
+});
+
+test("the PDF pinch-zooms with WebKit's gesture events @webkit", async ({ page }) => {
+  const view = await openHomework(page);
+  const before = await pageWidth(view);
+  await view.evaluate((el) => {
+    const send = (type: string, scale: number) => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(e, { scale, clientX: 200, clientY: 300 });
+      el.dispatchEvent(e);
+    };
+    send("gesturestart", 1);
+    for (const s of [1.2, 1.6, 2]) send("gesturechange", s);
+    send("gestureend", 2);
+  });
+  await expect.poll(() => pageWidth(view)).toBeCloseTo(before * 2, 0);
 });
 
 test("Ctrl+T translates the selection, opens an empty box without one, and asks for a key", async ({ page }) => {

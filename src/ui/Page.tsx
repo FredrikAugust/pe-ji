@@ -184,6 +184,12 @@ export const Page = forwardRef<
       moved = true;
     }
     if (moved && keep?.[0]?.isConnected && keep[2]?.isConnected) sel!.setBaseAndExtent(keep[0], keep[1], keep[2]!, keep[3]);
+    // Deleting everything can take the last line with it; the page always keeps one, with the caret in it.
+    if (!root.firstChild) {
+      const line = paintLine("", false, () => {});
+      root.append(line);
+      sel?.collapse(line, 0);
+    }
   };
 
   /** Text typed at the edge of a ruby lands inside its base; move it out. */
@@ -229,7 +235,8 @@ export const Page = forwardRef<
     const h = history.current;
     const now = performance.now();
     if (now - h.at > 1000) {
-      h.undo.push(prev);
+      // Typing a character and deleting it again comes back to the last snapshot; one ⌘Z must not do nothing.
+      if (h.undo[h.undo.length - 1] !== prev) h.undo.push(prev);
       if (h.undo.length > 200) h.undo.shift();
       h.redo = [];
       h.at = now;
@@ -331,7 +338,7 @@ export const Page = forwardRef<
 
   const apply = (e: Edit) => {
     const h = history.current;
-    h.undo.push(cur.current.text);
+    if (h.undo[h.undo.length - 1] !== cur.current.text) h.undo.push(cur.current.text);
     h.redo = [];
     h.at = -Infinity;
     sync(e.text);
@@ -617,7 +624,18 @@ export const Page = forwardRef<
         composing.current = false;
         emit();
       }}
-      onInput={emit}
+      onInput={(e) => {
+        // A composition can end without compositionend (Chromium, over a selection that starts in a ruby);
+        // an input that is not composing means it is over, or the page would stop recording edits.
+        if (!(e.nativeEvent as InputEvent).isComposing) composing.current = false;
+        emit();
+      }}
+      onBlur={() => {
+        if (composing.current) {
+          composing.current = false;
+          emit();
+        }
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") enterShift.current = e.shiftKey;
         // ⌘A and Ctrl+A both select the whole page (Ctrl+A would otherwise jump to line start on macOS).

@@ -803,6 +803,44 @@ test("an unsaved untitled page comes back from the welcome screen", async ({ pag
   await expect.poll(() => markup(page)).toBe("下書きのテスト");
 });
 
+test("edits still count when a composition never ends", async ({ page }) => {
+  await setDoc(page, "あ");
+  await placeCaret(page, "あ");
+  // Chromium can start a composition and never send compositionend (seen over a selection inside a ruby).
+  await page.getByTestId("editor").evaluate((el) => el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" })));
+  await page.keyboard.insertText("い");
+  await expect.poll(() => markup(page)).toBe("あい");
+});
+
+test("deleting everything leaves one empty line to type in", async ({ page }) => {
+  await page.getByTestId("btn-new").click();
+  const box = page.getByTestId("editor");
+  await box.click();
+  await page.keyboard.insertText("あ");
+  await page.keyboard.press("Meta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await expect(box.locator(":scope > .ln")).toHaveCount(1);
+  await page.keyboard.insertText("い");
+  await expect.poll(() => markup(page)).toBe("い");
+});
+
+test("every undo step changes something", async ({ page }) => {
+  await page.getByTestId("btn-new").click();
+  await page.getByTestId("editor").click();
+  await page.keyboard.insertText("あ");
+  await page.waitForTimeout(1100);
+  await page.keyboard.insertText("い");
+  await page.keyboard.press("Backspace");
+  await page.waitForTimeout(1100);
+  await page.keyboard.insertText("う");
+  await expect.poll(() => markup(page)).toBe("あう");
+  await page.keyboard.press("Meta+z");
+  await expect.poll(() => markup(page)).toBe("あ");
+  await page.keyboard.press("Meta+z");
+  await expect.poll(() => markup(page)).toBe("");
+});
+
 test("side panes close with × and the side column resizes", async ({ page }) => {
   await page.getByTestId("btn-translate").click();
   await page.getByTestId("btn-notes").click();

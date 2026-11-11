@@ -71,7 +71,7 @@ export const Page = forwardRef<
   const timer = useRef(0);
 
   // Short enough that readings keep up with typing, long enough to batch a burst of keys.
-  const schedule = (ms = 120) => {
+  const schedule = (ms = 30) => {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void refreshStale(), ms);
   };

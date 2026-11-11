@@ -2458,6 +2458,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pe-ji"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.3.4",
+ "lindera",
+ "reqwest",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tiny_http",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2514,20 +2528,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher",
-]
-
-[[package]]
-name = "pico-sakubun"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.3.4",
- "lindera",
- "reqwest",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tiny_http",
 ]
 
 [[package]]

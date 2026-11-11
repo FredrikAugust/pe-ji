@@ -28,7 +28,7 @@ describe("relay client", () => {
     const sockets: Fake[] = [];
     const status: RelayStatus[] = [];
     const stop = connectRelay(
-      "https://pico-relay.me.workers.dev/",
+      "https://pe-ji-relay.me.workers.dev/",
       "k ey",
       async (msg) => ({ jsonrpc: "2.0", id: (msg as { id: number }).id, result: {} }),
       (s) => status.push(s),
@@ -38,7 +38,7 @@ describe("relay client", () => {
         return ws;
       },
     );
-    expect(sockets[0].url).toBe("wss://pico-relay.me.workers.dev/connect?key=k%20ey");
+    expect(sockets[0].url).toBe("wss://pe-ji-relay.me.workers.dev/connect?key=k%20ey");
     sockets[0].open();
     sockets[0].receive({ rid: 3, msg: { jsonrpc: "2.0", id: 9, method: "ping" } });
     sockets[0].receive({ rid: null, msg: { jsonrpc: "2.0", method: "notifications/initialized" } });

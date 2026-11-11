@@ -25,8 +25,8 @@ describe("document state", () => {
   });
 
   it("marks a dirty title and counts characters without newlines", () => {
-    expect(formatTitle("十一月の日記.txt", false)).toBe("十一月の日記.txt — ぴこぴこ作文帳");
-    expect(formatTitle("無題.txt", true)).toBe("*無題.txt — ぴこぴこ作文帳");
+    expect(formatTitle("十一月の日記.txt", false)).toBe("十一月の日記.txt — pe-ji");
+    expect(formatTitle("無題.txt", true)).toBe("*無題.txt — pe-ji");
     expect(isDirty("a", "a")).toBe(false);
     expect(isDirty("a", "b")).toBe(true);
     expect(countChars("あ\nい\n")).toBe(2);

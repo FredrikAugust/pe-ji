@@ -1,5 +1,5 @@
 /**
- * MCP relay for ぴこぴこ作文帳.
+ * MCP relay for pe-ji.
  *
  * The desktop app keeps a WebSocket open to /connect (APP_KEY). An AI posts
  * MCP JSON-RPC to /mcp (BOT_KEY); the message is passed down the socket, the
@@ -68,7 +68,7 @@ export class Relay extends DurableObject {
       app?.send(JSON.stringify({ rid: null, msg }));
       return new Response(null, { status: 202 });
     }
-    if (!app) return rpcError(msg.id, "ぴこぴこ作文帳 is not open on any computer right now.");
+    if (!app) return rpcError(msg.id, "pe-ji is not open on any computer right now.");
 
     const rid = ++this.next;
     const reply = await new Promise((resolve) => {

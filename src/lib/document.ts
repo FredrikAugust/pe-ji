@@ -16,7 +16,7 @@ export function nextFontSize(size: number, dir: -1 | 0 | 1): number {
 }
 
 export function formatTitle(filename: string, dirty: boolean): string {
-  return `${dirty ? "*" : ""}${filename} — ぴこぴこ作文帳`;
+  return `${dirty ? "*" : ""}${filename} — pe-ji`;
 }
 
 export function furiLabel(mode: FuriMode): string {

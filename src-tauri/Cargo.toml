@@ -1,13 +1,13 @@
 [package]
-name = "pico-sakubun"
+name = "pe-ji"
 version = "0.1.0"
-description = "ぴこぴこ作文帳 — Japanese homework editor"
+description = "pe-ji (ページ) — a small word processor for Japanese learners"
 authors = ["Fredrik"]
 edition = "2021"
 rust-version = "1.90"
 
 [lib]
-name = "pico_sakubun_lib"
+name = "pe_ji_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

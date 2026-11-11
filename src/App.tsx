@@ -1567,7 +1567,7 @@ export function App() {
                 >
                   <label className="field">
                     リレーの URL
-                    <input name="url" placeholder="https://pico-relay.＜あなた＞.workers.dev" defaultValue={relay?.url ?? ""} />
+                    <input name="url" placeholder="https://pe-ji-relay.＜あなた＞.workers.dev" defaultValue={relay?.url ?? ""} />
                   </label>
                   <label className="field">
                     APP_KEY
@@ -1604,7 +1604,7 @@ export function App() {
               onMouseDown={(event) => event.stopPropagation()}
             >
               <div className="dialog-title" id="about-title">
-                ぴこぴこ作文帳 Ver.0.1
+                pe-ji（ページ）Ver.0.1
               </div>
               <div className="dialog-body">
                 <p>日本語を勉強する人のための小さなワープロです。</p>

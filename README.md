@@ -1,4 +1,4 @@
-# ぴこぴこ作文帳
+# pe-ji
 
 A small word processor for people learning Japanese. You write on one page with headings, bullets, bold, italic, indents and tables. Furigana sits above the kanji as you edit. The file on disk is still one plain-text file.
 
@@ -68,7 +68,7 @@ The server listens on localhost only; delete `mcp.token` in the app config folde
 
 ### Cloud AI (Grok and friends) through the relay
 
-A cloud agent cannot reach your computer, so the app connects out to a tiny relay on Cloudflare Workers (`relay/`, free tier). The agent always uses the same `https://pico-relay.<you>.workers.dev/mcp`; whichever computer opened the app last answers, and focusing the app on the other computer takes it back.
+A cloud agent cannot reach your computer, so the app connects out to a tiny relay on Cloudflare Workers (`relay/`, free tier). The agent always uses the same `https://pe-ji-relay.<you>.workers.dev/mcp`; whichever computer opened the app last answers, and focusing the app on the other computer takes it back.
 
 ```bash
 cd relay && pnpm install

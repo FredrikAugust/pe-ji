@@ -106,7 +106,7 @@ export const MENUS: MenuDef[] = [
     label: "ヘルプ(H)",
     items: [
       { label: "ショートカット一覧", command: "help.cheatsheet" },
-      { label: "ぴこぴこ作文帳について", command: "help.about" },
+      { label: "pe-ji について", command: "help.about" },
     ],
   },
 ];
@@ -166,7 +166,7 @@ export async function setNativeMenu(menus: MenuDef[], run: (item: MenuItem) => v
   const menu = await Menu.new({
     items: [
       {
-        text: "ぴこぴこ作文帳",
+        text: "pe-ji",
         items: [
           { item: { About: null } },
           { item: "Separator" },

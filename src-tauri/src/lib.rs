@@ -233,7 +233,7 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running ぴこぴこ作文帳");
+        .expect("error while running pe-ji");
 }
 
 #[cfg(test)]

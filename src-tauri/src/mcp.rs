@@ -135,7 +135,7 @@ pub fn handle(msg: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Option<Va
             json!({
                 "protocolVersion": VERSIONS.iter().find(|v| **v == asked).unwrap_or(&VERSIONS[0]),
                 "capabilities": { "tools": {} },
-                "serverInfo": { "name": "pico-sakubun", "version": env!("CARGO_PKG_VERSION") },
+                "serverInfo": { "name": "pe-ji", "version": env!("CARGO_PKG_VERSION") },
                 "instructions": INSTRUCTIONS,
             })
         }
@@ -154,7 +154,7 @@ pub fn handle(msg: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Option<Va
     Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
 }
 
-const INSTRUCTIONS: &str = "This is ぴこぴこ作文帳, a Japanese homework editor for a learner. \
+const INSTRUCTIONS: &str = "This is pe-ji, a small Japanese word processor for a learner. \
 Read the document, then leave notes or corrections on exact quotes from it. \
 Prefer add_note with kind \"correction\" and a suggestion over replace_text, so the learner decides. \
 Write comments in simple English unless asked otherwise.";

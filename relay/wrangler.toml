@@ -1,5 +1,5 @@
 # One relay per person: the desktop app connects out to /connect, the AI calls /mcp.
-name = "pico-relay"
+name = "pe-ji-relay"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 

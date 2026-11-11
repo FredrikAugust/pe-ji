@@ -60,7 +60,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("renders the sample diary with real ruby on the page you edit", async ({ page }) => {
-  await expect(page).toHaveTitle("十一月の日記.txt — ぴこぴこ作文帳");
+  await expect(page).toHaveTitle("十一月の日記.txt — pe-ji");
   await expect(page.locator(".titlebar, .banner, .caps")).toHaveCount(0);
   const editor = page.getByTestId("editor");
   await expect(editor.locator("rt").filter({ hasText: "きのう" }).first()).toBeVisible();

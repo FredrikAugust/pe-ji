@@ -1,0 +1,11 @@
+[package]
+name = "pico-core"
+version = "0.1.0"
+edition = "2021"
+description = "Furigana markup parser and UTF-8 document IO for ぴこぴこ作文帳"
+license = "MIT"
+rust-version = "1.77"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

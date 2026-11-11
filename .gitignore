@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+src-tauri/gen/
+playwright-report/
+test-results/
+blob-report/
+.DS_Store
+*.log
+.pico-tmp

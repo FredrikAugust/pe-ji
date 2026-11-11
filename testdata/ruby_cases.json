@@ -1,0 +1,792 @@
+{
+  "cases": [
+    {
+      "name": "empty",
+      "input": "",
+      "segments": [],
+      "html": ""
+    },
+    {
+      "name": "hiragana",
+      "input": "ひらがな",
+      "segments": [
+        {
+          "type": "text",
+          "text": "ひらがな"
+        }
+      ],
+      "html": "ひらがな"
+    },
+    {
+      "name": "latin",
+      "input": "Hello, world!",
+      "segments": [
+        {
+          "type": "text",
+          "text": "Hello, world!"
+        }
+      ],
+      "html": "Hello, world!"
+    },
+    {
+      "name": "implicit kanji",
+      "input": "漢字《かんじ》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        }
+      ],
+      "html": "<ruby>漢字<rt>かんじ</rt></ruby>"
+    },
+    {
+      "name": "multi kanji word",
+      "input": "日本語《にほんご》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "日本語",
+          "reading": "にほんご"
+        }
+      ],
+      "html": "<ruby>日本語<rt>にほんご</rt></ruby>"
+    },
+    {
+      "name": "fullwidth pipe",
+      "input": "｜食べ《た》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "食べ",
+          "reading": "た"
+        }
+      ],
+      "html": "<ruby>食べ<rt>た</rt></ruby>"
+    },
+    {
+      "name": "halfwidth pipe",
+      "input": "|今日《きょう》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "今日",
+          "reading": "きょう"
+        }
+      ],
+      "html": "<ruby>今日<rt>きょう</rt></ruby>"
+    },
+    {
+      "name": "kana without pipe is literal",
+      "input": "食べ《た》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "食べ《た》"
+        }
+      ],
+      "html": "食べ《た》"
+    },
+    {
+      "name": "multiple ruby",
+      "input": "今日《きょう》は日本語《にほんご》です。",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "今日",
+          "reading": "きょう"
+        },
+        {
+          "type": "text",
+          "text": "は"
+        },
+        {
+          "type": "ruby",
+          "base": "日本語",
+          "reading": "にほんご"
+        },
+        {
+          "type": "text",
+          "text": "です。"
+        }
+      ],
+      "html": "<ruby>今日<rt>きょう</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>です。"
+    },
+    {
+      "name": "brace",
+      "input": "{漢字|かんじ}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        }
+      ],
+      "html": "<ruby>漢字<rt>かんじ</rt></ruby>"
+    },
+    {
+      "name": "brace kana",
+      "input": "{食べ|た}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "食べ",
+          "reading": "た"
+        }
+      ],
+      "html": "<ruby>食べ<rt>た</rt></ruby>"
+    },
+    {
+      "name": "mixed syntax",
+      "input": "今日《きょう》は{晴れ|はれ}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "今日",
+          "reading": "きょう"
+        },
+        {
+          "type": "text",
+          "text": "は"
+        },
+        {
+          "type": "ruby",
+          "base": "晴れ",
+          "reading": "はれ"
+        }
+      ],
+      "html": "<ruby>今日<rt>きょう</rt></ruby>は<ruby>晴れ<rt>はれ</rt></ruby>"
+    },
+    {
+      "name": "unmatched open",
+      "input": "漢字《かん",
+      "segments": [
+        {
+          "type": "text",
+          "text": "漢字《かん"
+        }
+      ],
+      "html": "漢字《かん"
+    },
+    {
+      "name": "stray close",
+      "input": "》です",
+      "segments": [
+        {
+          "type": "text",
+          "text": "》です"
+        }
+      ],
+      "html": "》です"
+    },
+    {
+      "name": "unmatched brace",
+      "input": "{漢字|かんじ",
+      "segments": [
+        {
+          "type": "text",
+          "text": "{漢字|かんじ"
+        }
+      ],
+      "html": "{漢字|かんじ"
+    },
+    {
+      "name": "empty reading aozora",
+      "input": "漢字《》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": ""
+        }
+      ],
+      "html": "<ruby>漢字<rt></rt></ruby>"
+    },
+    {
+      "name": "empty reading brace",
+      "input": "{漢字|}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": ""
+        }
+      ],
+      "html": "<ruby>漢字<rt></rt></ruby>"
+    },
+    {
+      "name": "empty base pipe",
+      "input": "｜《かんじ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "｜《かんじ》"
+        }
+      ],
+      "html": "｜《かんじ》"
+    },
+    {
+      "name": "empty base brace",
+      "input": "{|かんじ}",
+      "segments": [
+        {
+          "type": "text",
+          "text": "{|かんじ}"
+        }
+      ],
+      "html": "{|かんじ}"
+    },
+    {
+      "name": "escape bracket",
+      "input": "漢字\\《かんじ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "漢字《かんじ》"
+        }
+      ],
+      "html": "漢字《かんじ》"
+    },
+    {
+      "name": "escape braces",
+      "input": "\\{漢字|かんじ\\}",
+      "segments": [
+        {
+          "type": "text",
+          "text": "{漢字|かんじ}"
+        }
+      ],
+      "html": "{漢字|かんじ}"
+    },
+    {
+      "name": "double backslash",
+      "input": "\\\\",
+      "segments": [
+        {
+          "type": "text",
+          "text": "\\"
+        }
+      ],
+      "html": "\\"
+    },
+    {
+      "name": "newline blocks ruby",
+      "input": "漢字\n《かんじ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "漢字\n《かんじ》"
+        }
+      ],
+      "html": "漢字<br>《かんじ》"
+    },
+    {
+      "name": "ruby newline ruby",
+      "input": "朝《あさ》\n夜《よる》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "朝",
+          "reading": "あさ"
+        },
+        {
+          "type": "text",
+          "text": "\n"
+        },
+        {
+          "type": "ruby",
+          "base": "夜",
+          "reading": "よる"
+        }
+      ],
+      "html": "<ruby>朝<rt>あさ</rt></ruby><br><ruby>夜<rt>よる</rt></ruby>"
+    },
+    {
+      "name": "crlf",
+      "input": "A\r\nB",
+      "segments": [
+        {
+          "type": "text",
+          "text": "A\r\nB"
+        }
+      ],
+      "html": "A<br>B"
+    },
+    {
+      "name": "html in reading",
+      "input": "漢《<b>》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢",
+          "reading": "<b>"
+        }
+      ],
+      "html": "<ruby>漢<rt>&lt;b&gt;</rt></ruby>"
+    },
+    {
+      "name": "html in text",
+      "input": "a<b>&c",
+      "segments": [
+        {
+          "type": "text",
+          "text": "a<b>&c"
+        }
+      ],
+      "html": "a&lt;b&gt;&amp;c"
+    },
+    {
+      "name": "iteration mark",
+      "input": "人々《ひとびと》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "人々",
+          "reading": "ひとびと"
+        }
+      ],
+      "html": "<ruby>人々<rt>ひとびと</rt></ruby>"
+    },
+    {
+      "name": "small ke",
+      "input": "一ヶ《いっか》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "一ヶ",
+          "reading": "いっか"
+        }
+      ],
+      "html": "<ruby>一ヶ<rt>いっか</rt></ruby>"
+    },
+    {
+      "name": "latin around ruby",
+      "input": "Hello 漢字《かんじ》 world",
+      "segments": [
+        {
+          "type": "text",
+          "text": "Hello "
+        },
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        },
+        {
+          "type": "text",
+          "text": " world"
+        }
+      ],
+      "html": "Hello <ruby>漢字<rt>かんじ</rt></ruby> world"
+    },
+    {
+      "name": "pipe at newline",
+      "input": "｜\n次",
+      "segments": [
+        {
+          "type": "text",
+          "text": "｜\n次"
+        }
+      ],
+      "html": "｜<br>次"
+    },
+    {
+      "name": "brace contains aozora-looking text",
+      "input": "{漢《かん》字|よみ}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢《かん》字",
+          "reading": "よみ"
+        }
+      ],
+      "html": "<ruby>漢《かん》字<rt>よみ</rt></ruby>"
+    },
+    {
+      "name": "spaces in reading",
+      "input": "漢字《かん じ》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かん じ"
+        }
+      ],
+      "html": "<ruby>漢字<rt>かん じ</rt></ruby>"
+    },
+    {
+      "name": "halfwidth katakana",
+      "input": "ｶﾀｶﾅです",
+      "segments": [
+        {
+          "type": "text",
+          "text": "ｶﾀｶﾅです"
+        }
+      ],
+      "html": "ｶﾀｶﾅです"
+    },
+    {
+      "name": "brackets alone",
+      "input": "《》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "《》"
+        }
+      ],
+      "html": "《》"
+    },
+    {
+      "name": "adjacent rubies",
+      "input": "漢字《かんじ》文字《もじ》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        },
+        {
+          "type": "ruby",
+          "base": "文字",
+          "reading": "もじ"
+        }
+      ],
+      "html": "<ruby>漢字<rt>かんじ</rt></ruby><ruby>文字<rt>もじ</rt></ruby>"
+    },
+    {
+      "name": "escaped pipe then implicit",
+      "input": "\\|今日《きょう》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "|"
+        },
+        {
+          "type": "ruby",
+          "base": "今日",
+          "reading": "きょう"
+        }
+      ],
+      "html": "|<ruby>今日<rt>きょう</rt></ruby>"
+    },
+    {
+      "name": "ampersand in explicit base",
+      "input": "｜A&B《ab》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "A&B",
+          "reading": "ab"
+        }
+      ],
+      "html": "<ruby>A&amp;B<rt>ab</rt></ruby>"
+    },
+    {
+      "name": "brace reading contains pipe",
+      "input": "{a|b|c}",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "a",
+          "reading": "b|c"
+        }
+      ],
+      "html": "<ruby>a<rt>b|c</rt></ruby>"
+    },
+    {
+      "name": "fullwidth braces are literal",
+      "input": "｛漢字｝",
+      "segments": [
+        {
+          "type": "text",
+          "text": "｛漢字｝"
+        }
+      ],
+      "html": "｛漢字｝"
+    },
+    {
+      "name": "kanji then brace",
+      "input": "字{漢|かん}",
+      "segments": [
+        {
+          "type": "text",
+          "text": "字"
+        },
+        {
+          "type": "ruby",
+          "base": "漢",
+          "reading": "かん"
+        }
+      ],
+      "html": "字<ruby>漢<rt>かん</rt></ruby>"
+    },
+    {
+      "name": "quotes",
+      "input": "Say \"hi\"",
+      "segments": [
+        {
+          "type": "text",
+          "text": "Say \"hi\""
+        }
+      ],
+      "html": "Say &quot;hi&quot;"
+    },
+    {
+      "name": "apostrophe",
+      "input": "it's",
+      "segments": [
+        {
+          "type": "text",
+          "text": "it's"
+        }
+      ],
+      "html": "it&#39;s"
+    },
+    {
+      "name": "newline inside reading",
+      "input": "漢字《かん\nじ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "漢字《かん\nじ》"
+        }
+      ],
+      "html": "漢字《かん<br>じ》"
+    },
+    {
+      "name": "pipe and implicit together",
+      "input": "｜食べ《た》ものと飲《の》み物",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "食べ",
+          "reading": "た"
+        },
+        {
+          "type": "text",
+          "text": "ものと"
+        },
+        {
+          "type": "ruby",
+          "base": "飲",
+          "reading": "の"
+        },
+        {
+          "type": "text",
+          "text": "み物"
+        }
+      ],
+      "html": "<ruby>食べ<rt>た</rt></ruby>ものと<ruby>飲<rt>の</rt></ruby>み物"
+    },
+    {
+      "name": "empty reading between text",
+      "input": "前《》後",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "前",
+          "reading": ""
+        },
+        {
+          "type": "text",
+          "text": "後"
+        }
+      ],
+      "html": "<ruby>前<rt></rt></ruby>後"
+    },
+    {
+      "name": "tab",
+      "input": "A\tB",
+      "segments": [
+        {
+          "type": "text",
+          "text": "A\tB"
+        }
+      ],
+      "html": "A\tB"
+    },
+    {
+      "name": "lone cr",
+      "input": "A\rB",
+      "segments": [
+        {
+          "type": "text",
+          "text": "A\rB"
+        }
+      ],
+      "html": "A<br>B"
+    },
+    {
+      "name": "trailing backslash",
+      "input": "abc\\",
+      "segments": [
+        {
+          "type": "text",
+          "text": "abc\\"
+        }
+      ],
+      "html": "abc\\"
+    },
+    {
+      "name": "escaped close in reading",
+      "input": "漢字《か\\》ん》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "か》ん"
+        }
+      ],
+      "html": "<ruby>漢字<rt>か》ん</rt></ruby>"
+    },
+    {
+      "name": "spaces in explicit base",
+      "input": "｜食べ る《たべる》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "食べ る",
+          "reading": "たべる"
+        }
+      ],
+      "html": "<ruby>食べ る<rt>たべる</rt></ruby>"
+    },
+    {
+      "name": "emoji around ruby",
+      "input": "★漢字《かんじ》☆",
+      "segments": [
+        {
+          "type": "text",
+          "text": "★"
+        },
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        },
+        {
+          "type": "text",
+          "text": "☆"
+        }
+      ],
+      "html": "★<ruby>漢字<rt>かんじ</rt></ruby>☆"
+    },
+    {
+      "name": "fullwidth pipe is not a brace separator",
+      "input": "{漢字｜かんじ}",
+      "segments": [
+        {
+          "type": "text",
+          "text": "{漢字｜かんじ}"
+        }
+      ],
+      "html": "{漢字｜かんじ}"
+    },
+    {
+      "name": "gt escape",
+      "input": "a>b",
+      "segments": [
+        {
+          "type": "text",
+          "text": "a>b"
+        }
+      ],
+      "html": "a&gt;b"
+    },
+    {
+      "name": "extension b kanji",
+      "input": "𠀋《あ》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "𠀋",
+          "reading": "あ"
+        }
+      ],
+      "html": "<ruby>𠀋<rt>あ</rt></ruby>"
+    },
+    {
+      "name": "shime mark",
+      "input": "〆《しめ》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "〆",
+          "reading": "しめ"
+        }
+      ],
+      "html": "<ruby>〆<rt>しめ</rt></ruby>"
+    },
+    {
+      "name": "small ka",
+      "input": "ヵ《か》月",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "ヵ",
+          "reading": "か"
+        },
+        {
+          "type": "text",
+          "text": "月"
+        }
+      ],
+      "html": "<ruby>ヵ<rt>か</rt></ruby>月"
+    },
+    {
+      "name": "escaped pipe inside explicit base",
+      "input": "｜本\\｜物《ほんもの》",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "本｜物",
+          "reading": "ほんもの"
+        }
+      ],
+      "html": "<ruby>本｜物<rt>ほんもの</rt></ruby>"
+    },
+    {
+      "name": "unmatched brace then real ruby",
+      "input": "{nope漢字《かんじ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "{nope"
+        },
+        {
+          "type": "ruby",
+          "base": "漢字",
+          "reading": "かんじ"
+        }
+      ],
+      "html": "{nope<ruby>漢字<rt>かんじ</rt></ruby>"
+    },
+    {
+      "name": "script injection",
+      "input": "漢《<script>》&",
+      "segments": [
+        {
+          "type": "ruby",
+          "base": "漢",
+          "reading": "<script>"
+        },
+        {
+          "type": "text",
+          "text": "&"
+        }
+      ],
+      "html": "<ruby>漢<rt>&lt;script&gt;</rt></ruby>&amp;"
+    },
+    {
+      "name": "okurigana blocks implicit ruby",
+      "input": "晴れ《はれ》",
+      "segments": [
+        {
+          "type": "text",
+          "text": "晴れ《はれ》"
+        }
+      ],
+      "html": "晴れ《はれ》"
+    }
+  ]
+}

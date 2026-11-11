@@ -322,6 +322,13 @@ export const Page = forwardRef<
     elOf(b.node)?.scrollIntoView({ block: "nearest" });
   };
 
+  /** Focus alone leaves the caret on the page box itself, drawn in its corner; put it at the start of the text. */
+  const caretIntoText = () => {
+    const root = rootRef.current;
+    const at = window.getSelection()?.anchorNode;
+    if (root?.querySelector(".ln") && !(at && root.contains(at) && elOf(at)?.closest(".ln"))) setCaret(0, 0);
+  };
+
   const apply = (e: Edit) => {
     const h = history.current;
     h.undo.push(cur.current.text);
@@ -518,7 +525,9 @@ export const Page = forwardRef<
     const keys = doc.text.split("\n").flatMap(lineKeys);
     const ready = loadReadings(keys).catch(() => {});
     void Promise.race([ready, new Promise((r) => setTimeout(r, 300))]).then(() => {
-      if (live) sync(doc.text);
+      if (!live) return;
+      sync(doc.text);
+      if (document.activeElement === rootRef.current) caretIntoText();
     });
     return () => {
       live = false;
@@ -527,7 +536,10 @@ export const Page = forwardRef<
 
   useImperativeHandle(ref, () => ({
     focus() {
-      rootRef.current?.focus();
+      const root = rootRef.current;
+      if (!root) return;
+      root.focus();
+      caretIntoText();
     },
     selectAll() {
       const el = rootRef.current;

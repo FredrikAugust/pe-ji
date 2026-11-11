@@ -125,9 +125,8 @@ test("opens the cheatsheet from Ctrl+/ and from ?", async ({ page }) => {
 });
 
 test("does not open the cheatsheet when ? is typed in the editor", async ({ page }) => {
-  const box = await editor(page);
-  await box.focus();
-  await page.keyboard.press("End");
+  await editor(page);
+  await placeCaret(page, "十一月の日記");
   await page.keyboard.insertText("?");
   await expect(page.getByTestId("cheatsheet")).toHaveCount(0);
   await expect.poll(() => markup(page)).toMatch(/日記\?/);
@@ -135,8 +134,7 @@ test("does not open the cheatsheet when ? is typed in the editor", async ({ page
 
 test("asks before discarding unsaved work", async ({ page }) => {
   const box = await editor(page);
-  await box.focus();
-  await page.keyboard.press("End");
+  await placeCaret(page, "十一月の日記");
   await page.keyboard.insertText("！");
   await expect(page.getByTestId("app")).toHaveAttribute("data-dirty", "yes");
 
@@ -540,6 +538,13 @@ test("translates the caret's line with Ctrl+T and asks for a key when there is n
   await chord(page, "t", { ctrl: true });
   expect(await page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual(["EN-US:昨日勉強した。"]);
 
+  // One button flips JP→EN to EN→JP and translates the same text again.
+  const dir = page.getByTestId("translate-direction");
+  await expect(dir).toHaveText("日→英");
+  await dir.click();
+  await expect(dir).toHaveText("英→日");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual(["EN-US:昨日勉強した。", "JA:昨日勉強した。"]);
+
   await placeCaret(page, "鍵");
   await chord(page, "t", { ctrl: true });
   await expect(page.getByTestId("translate-result")).toContainText("API キー");
@@ -665,6 +670,18 @@ test("arrow keys step one character across words with readings @webkit", async (
   for (let k = 0; k < 3; k++) await page.keyboard.press("ArrowRight");
   await page.keyboard.insertText("X");
   await expect.poll(() => markup(page)).toBe("あ昨日Xは日い");
+});
+
+test("a new or opened page puts the caret in the text, not the page corner @webkit", async ({ page }) => {
+  const inLine = () =>
+    page.evaluate(() => {
+      const n = getSelection()!.anchorNode;
+      return !!(n instanceof Element ? n : n?.parentElement)?.closest(".ln");
+    });
+  await page.getByTestId("btn-new").click();
+  await expect.poll(inLine).toBe(true);
+  await setDoc(page, "あ\nい");
+  await expect.poll(inLine).toBe(true);
 });
 
 test("side panes close with × and the side column resizes", async ({ page }) => {

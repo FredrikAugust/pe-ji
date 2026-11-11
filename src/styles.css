@@ -40,7 +40,7 @@ html, body, #root {
   margin: 0;
 }
 /* The window itself never scrolls or rubber-bands; only the panes inside it do. */
-html, body { overflow: hidden; overscroll-behavior: none; }
+html { overscroll-behavior: none; }
 
 body {
   font-family: var(--chrome);

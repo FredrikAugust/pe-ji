@@ -52,6 +52,8 @@ async function chord(page: Page, key: string, mods: { ctrl?: boolean; shift?: bo
 }
 
 test.beforeEach(async ({ page }) => {
+  // No test reaches Jisho, DeepL or anything else off this machine; tests that need Jisho mock it on top.
+  await page.route(/^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto("/");
   await expect(page.getByTestId("app")).toHaveAttribute("data-furigana-mode", "show");
   await expect(page.getByTestId("editor").locator("ruby").first()).toBeVisible();

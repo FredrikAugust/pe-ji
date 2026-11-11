@@ -701,6 +701,16 @@ test("a new or opened page puts the caret in the text, not the page corner @webk
   await expect.poll(inLine).toBe(true);
 });
 
+test("an unsaved untitled page comes back from the welcome screen", async ({ page }) => {
+  await page.getByTestId("btn-new").click();
+  await page.getByTestId("editor").click();
+  await page.keyboard.insertText("下書きのテスト");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("pico.draft"))).toBe("下書きのテスト");
+  await page.reload();
+  await page.getByTestId("open-draft").click();
+  await expect.poll(() => markup(page)).toBe("下書きのテスト");
+});
+
 test("side panes close with × and the side column resizes", async ({ page }) => {
   await page.getByTestId("btn-translate").click();
   await page.getByTestId("btn-notes").click();

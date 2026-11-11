@@ -76,6 +76,16 @@ const RELAY_LABEL: Record<RelayStatus, string> = {
   replaced: "別のパソコンが使っています",
 };
 const RECENT_KEY = "pico.recent";
+/** The last untitled page, so it survives a crash or a quit. */
+const DRAFT_KEY = "pico.draft";
+
+function readDraft(): string {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export function App() {
   const platform: Platform =
@@ -232,7 +242,7 @@ export function App() {
   );
 
   const tauriWrite = useCallback(
-    async (target: string) => {
+    async (target: string, quiet = false) => {
       // Read once: typing during the write must stay dirty.
       const body = textRef.current;
       const { invoke } = await import("@tauri-apps/api/core");
@@ -240,10 +250,16 @@ export function App() {
         path: target,
         contents: encodeEol(body, eolRef.current),
       });
+      if (!pathRef.current) {
+        // The untitled page now lives in a file; its draft is no longer needed.
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      }
       setPath(target);
       setFilename(basename(target));
       setSaved(body);
-      flash("保存しました");
+      if (!quiet) flash("保存しました");
     },
     [flash],
   );
@@ -304,6 +320,21 @@ export function App() {
     saveBrowser(name);
     setOverlay("none");
   }, [flash, saveAsDraft, saveBrowser]);
+
+  // Autosave a second after typing stops: a file on disk is written in place, an untitled page is kept as a draft.
+  useEffect(() => {
+    if (welcome || !dirty) return;
+    const t = setTimeout(() => {
+      if (path) {
+        if (isTauri()) tauriWrite(path, true).catch(failSave);
+      } else if (text) {
+        try {
+          localStorage.setItem(DRAFT_KEY, text);
+        } catch {}
+      }
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [welcome, dirty, path, text, tauriWrite, failSave]);
 
   const updateRecent = useCallback((change: (list: string[]) => string[]) => {
     setRecent((list) => {
@@ -1298,6 +1329,8 @@ export function App() {
             onOpen={() => run("file.open")}
             onSample={() => run("file.sample")}
             onRecent={(path) => void openPath(path)}
+            draft={readDraft()}
+            onDraft={() => loadDoc({ text: readDraft(), eol: "\n" }, UNTITLED_NAME, null, "下書きを開きました")}
           />
         ) : (
         <div className="desk">

@@ -13,6 +13,8 @@ export function Welcome(props: {
   onOpen: () => void;
   onSample: () => void;
   onRecent: (path: string) => void;
+  draft: string;
+  onDraft: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -57,6 +59,15 @@ export function Welcome(props: {
             <span>サンプルを開く</span>
             <span className="shortcut" />
           </button>
+          {props.draft && (
+            <button type="button" className="mi" data-testid="open-draft" onClick={props.onDraft}>
+              <span className="recent-name">
+                保存していない下書き
+                <span className="recent-dir">{props.draft.slice(0, 30)}</span>
+              </span>
+              <span className="shortcut" />
+            </button>
+          )}
           {props.recent.length > 0 && (
             <>
               <h2>最近使ったファイル</h2>

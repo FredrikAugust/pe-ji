@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     permissions:
-      contents: read
+      contents: write
       actions: write
     strategy:
       fail-fast: false
@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -50,7 +50,8 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: ./src-tauri -> target
+          workspaces: . -> target
+          key: ${{ matrix.rust-targets }}
 
       - run: pnpm install --frozen-lockfile
 
@@ -59,4 +60,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           uploadWorkflowArtifacts: true
+          tagName: v__VERSION__
+          releaseName: pe-ji v__VERSION__
+          releaseDraft: false
           args: ${{ matrix.args }}

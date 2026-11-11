@@ -164,7 +164,7 @@ const MARKUP: &str = "The text is the file's source: `# `/`## `/`### ` headings,
 and Aozora notes `［＃…］`. Furigana shown on screen is automatic and not in the text.";
 
 fn tools() -> Value {
-    let quote = json!({ "type": "string", "description": "Exact text copied from read_document." });
+    let quote = json!({ "type": "string", "description": "Text from the document as the learner sees it; ruby readings and markup may be left out." });
     let occurrence = json!({ "type": "integer", "minimum": 1, "description": "Which match of quote, if it appears more than once (default 1)." });
     json!([
         {
@@ -216,26 +216,27 @@ fn tools() -> Value {
 fn call(name: &str, args: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Result<String, String> {
     let doc = state.doc.lock().unwrap();
     let str_arg = |k: &str| args[k].as_str().map(str::to_string);
-    let find = |quote: &Option<String>| -> Result<(String, u64), String> {
-        let q = quote.clone().filter(|q| !q.is_empty()).ok_or("quote is required")?;
-        let n = args["occurrence"].as_u64().unwrap_or(1).max(1);
-        let count = doc.text.matches(q.as_str()).count() as u64;
-        if count < n {
-            return Err(format!("quote not found in the document ({count} matches); copy it exactly from read_document"));
-        }
-        Ok((q, n))
+    // The quote as the AI wrote it, and where it sits in the source: (quote, source text, UTF-16 offset).
+    let find = |quote: &Option<String>| -> Result<(String, String, usize), String> {
+        let q = quote.clone().filter(|q| !q.trim().is_empty()).ok_or("quote is required")?;
+        let n = args["occurrence"].as_u64().unwrap_or(1).max(1) as usize;
+        let found = matches(&doc.text, &q);
+        let Some(&(start, end)) = found.get(n - 1) else {
+            return Err(format!("quote not found in the document ({} matches)", found.len()));
+        };
+        Ok((q, doc.text[start..end].to_string(), doc.text[..start].encode_utf16().count()))
     };
     match name {
         "read_document" => Ok(json!({ "name": doc.name, "text": doc.text, "selection": doc.selection }).to_string()),
         "list_notes" => Ok(doc.notes.to_string()),
         "add_note" => {
-            let (quote, occurrence) = find(&str_arg("quote"))?;
+            let (quote, source, at) = find(&str_arg("quote"))?;
             let comment = str_arg("comment").filter(|c| !c.trim().is_empty()).ok_or("comment is required")?;
             let kind = if args["kind"] == "correction" { "correction" } else { "note" };
             let id = format!("n{}", state.next_note.fetch_add(1, Ordering::SeqCst) + 1);
             emit(
                 "mcp-note",
-                json!({ "id": id, "quote": quote, "occurrence": occurrence, "comment": comment, "kind": kind, "suggestion": str_arg("suggestion") }),
+                json!({ "id": id, "quote": quote, "source": source, "at": at, "comment": comment, "kind": kind, "suggestion": str_arg("suggestion") }),
             );
             Ok(format!("added note {id}"))
         }
@@ -245,13 +246,57 @@ fn call(name: &str, args: &Value, state: &Mcp, emit: &dyn Fn(&str, Value)) -> Re
             Ok(format!("removed note {id}"))
         }
         "replace_text" => {
-            let (quote, occurrence) = find(&str_arg("quote"))?;
+            let (_, source, at) = find(&str_arg("quote"))?;
             let replacement = str_arg("replacement").ok_or("replacement is required")?;
-            emit("mcp-replace", json!({ "quote": quote, "occurrence": occurrence, "replacement": replacement }));
+            emit("mcp-replace", json!({ "source": source, "at": at, "replacement": replacement }));
             Ok("replaced".into())
         }
         _ => Err(format!("unknown tool {name}")),
     }
+}
+
+/// Byte ranges of `quote` in the source `text`, reading it the way the page shows it:
+/// ruby readings `《…》`, ruby bars `｜`, Aozora notes `［＃…］` and `*` emphasis in the
+/// text are skipped, so "今日は" finds `今日《きょう》は`. A match keeps the word's own
+/// reading and bar, so replacing it never leaves half a ruby behind.
+fn matches(text: &str, quote: &str) -> Vec<(usize, usize)> {
+    let q: Vec<char> = quote.chars().collect();
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < text.len() {
+        match match_at(text, start, &q) {
+            Some(end) => {
+                let from = if text[..start].ends_with('｜') { start - '｜'.len_utf8() } else { start };
+                out.push((from, end));
+                start = end;
+            }
+            None => start += text[start..].chars().next().map_or(1, char::len_utf8),
+        }
+    }
+    out
+}
+
+fn match_at(text: &str, start: usize, q: &[char]) -> Option<usize> {
+    let (mut i, mut k) = (start, 0);
+    while k < q.len() {
+        let c = text[i..].chars().next()?;
+        if c == q[k] {
+            i += c.len_utf8();
+            k += 1;
+        } else if k > 0 {
+            i = skip_markup(text, i)?;
+        } else {
+            return None;
+        }
+    }
+    // Take the last word's reading along with it.
+    Some(if text[i..].starts_with('《') { skip_markup(text, i).unwrap_or(i) } else { i })
+}
+
+fn skip_markup(text: &str, i: usize) -> Option<usize> {
+    let rest = &text[i..];
+    let close = |open: &str, close: char| rest.starts_with(open).then(|| rest.find(close).map(|j| i + j + close.len_utf8())).flatten();
+    close("《", '》').or_else(|| close("［＃", '］')).or_else(|| ["｜", "*"].iter().find(|m| rest.starts_with(**m)).map(|m| i + m.len()))
 }
 
 #[cfg(test)]
@@ -289,6 +334,7 @@ mod tests {
         assert_eq!(ok["result"]["content"][0]["text"], "added note n1");
         assert_eq!(events[0].0, "mcp-note");
         assert_eq!(events[0].1["suggestion"], "行った");
+        assert_eq!((events[0].1["source"].as_str(), events[0].1["at"].as_u64()), (Some("行きました"), Some(6)));
 
         assert!(handle(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), &state, &|_, _| {}).is_none());
         assert_eq!(rpc(&state, "nope", json!({})).0["error"]["code"], -32601);
@@ -313,6 +359,19 @@ mod tests {
         let ok = post("Authorization: Bearer secret\r\n");
         assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
         assert!(ok.ends_with(r#"{"id":7,"jsonrpc":"2.0","result":{}}"#), "{ok}");
+    }
+
+    #[test]
+    fn quotes_match_what_the_page_shows() {
+        let text = "今日《きょう》はもっと｜食べ《た》たい。**大事**な［＃傍点］話";
+        let src = |q: &str| matches(text, q).iter().map(|&(s, e)| &text[s..e]).collect::<Vec<_>>();
+        assert_eq!(src("今日はもっと"), ["今日《きょう》はもっと"]);
+        assert_eq!(src("今日"), ["今日《きょう》"]);
+        assert_eq!(src("食べたい"), ["｜食べ《た》たい"]);
+        assert_eq!(src("大事な話"), ["大事**な［＃傍点］話"]);
+        assert_eq!(src("きょう"), ["きょう"]);
+        assert!(src("明日").is_empty());
+        assert_eq!(matches("あいあい", "あい").len(), 2);
     }
 
     #[test]

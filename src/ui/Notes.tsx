@@ -18,7 +18,7 @@ export function Notes(props: {
             <div className={`entry note-${n.kind}`} key={n.id} data-testid="note">
               <button type="button" className="note-quote" disabled={gone} onClick={() => props.onPick(n)}>
                 <span className={`tagp ${n.kind === "correction" ? "jlpt" : ""}`}>{n.kind === "correction" ? "訂正" : "メモ"}</span>
-                <span className="q">{n.quote}</span>
+                <span className="q">{n.label}</span>
                 {n.suggestion && <span className="q"> → {n.suggestion}</span>}
               </button>
               <div className="gloss">{n.comment}</div>

@@ -549,8 +549,8 @@ test("AI notes highlight the quote, and a correction can be applied", async ({ p
   const mcp = (event: string, payload: object) =>
     page.evaluate(([e, p]) => (window as unknown as { __picoMcp: (e: string, p: object) => void }).__picoMcp(e, p), [event, payload] as const);
 
-  await mcp("mcp-note", { id: "n1", quote: "行きます", occurrence: 1, comment: "Past tense: 昨日.", kind: "correction", suggestion: "行きました" });
-  await mcp("mcp-note", { id: "n2", quote: "学校", occurrence: 2, comment: "Nice.", kind: "note", suggestion: null });
+  await mcp("mcp-note", { id: "n1", quote: "行きます", source: "行きます", at: 6, comment: "Past tense: 昨日.", kind: "correction", suggestion: "行きました" });
+  await mcp("mcp-note", { id: "n2", quote: "学校", source: "学校", at: 12, comment: "Nice.", kind: "note", suggestion: null });
   const panel = page.getByTestId("notes");
   await expect(panel.getByTestId("note")).toHaveCount(2);
   await expect(page.getByTestId("btn-notes")).toHaveText("メモ（2）");
@@ -561,9 +561,21 @@ test("AI notes highlight the quote, and a correction can be applied", async ({ p
   await expect(panel.getByTestId("note")).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => CSS.highlights.get("pico-note")?.size)).toBe(1);
 
-  await mcp("mcp-replace", { quote: "楽しい", occurrence: 1, replacement: "とても楽しい" });
+  await mcp("mcp-replace", { source: "楽しい", at: 15, replacement: "とても楽しい" });
   await expect.poll(() => markup(page)).toBe("昨日、学校に行きました。\n学校はとても楽しい。");
   await mcp("mcp-remove-note", { id: "n2" });
+  await expect(panel.getByTestId("note")).toHaveCount(0);
+});
+
+test("a correction on a word with a reading in the file replaces the reading too", async ({ page }) => {
+  await setDoc(page, "今日《きょう》はたのしい。");
+  const mcp = (event: string, payload: object) =>
+    page.evaluate(([e, p]) => (window as unknown as { __picoMcp: (e: string, p: object) => void }).__picoMcp(e, p), [event, payload] as const);
+  const panel = page.getByTestId("notes");
+  await mcp("mcp-note", { id: "n3", quote: "今日は", source: "今日《きょう》は", at: 0, comment: "Try 明日.", kind: "correction", suggestion: "明日は" });
+  await expect(panel.getByTestId("note")).toContainText("今日は → 明日は");
+  await panel.getByRole("button", { name: "適用" }).click();
+  await expect.poll(() => markup(page)).toBe("明日はたのしい。");
   await expect(panel.getByTestId("note")).toHaveCount(0);
 });
 
@@ -604,4 +616,17 @@ test("the PDF sits left of the page, resizes, and dropped files open", async ({ 
   await expect.poll(() => markup(page)).toBe("ドロップした作文");
   await dropFile(page, "x.docx", "application/octet-stream", "x");
   await expect(page.getByTestId("status-message")).toContainText(".pdf");
+});
+
+test("Ctrl+A selects everything in the Jisho and translate boxes", async ({ page }) => {
+  for (const [toggle, id] of [["dict", "dict-input"], ["translate", "translate-input"]] as const) {
+    if (toggle === "translate") await page.getByTestId("btn-translate").click();
+    const box = page.getByTestId(id);
+    await box.fill("食べる 飲む");
+    await box.press("End");
+    await page.keyboard.press("Control+a");
+    expect(await box.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 6]);
+    await page.keyboard.press("Meta+a");
+    expect(await box.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 6]);
+  }
 });

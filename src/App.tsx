@@ -56,7 +56,7 @@ import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
 import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
 import { Notes } from "./ui/Notes";
-import { nth, place, type Note } from "./lib/notes";
+import { place, type Note } from "./lib/notes";
 import { connectRelay, type RelayStatus } from "./lib/relay";
 import { Page, type PageHandle } from "./ui/Page";
 
@@ -661,14 +661,17 @@ export function App() {
 
   const onMcp = useCallback(
     (event: string, p: Record<string, unknown>) => {
+      // Rust found the quote: `source` is the matched source text, `at` its offset a moment ago.
+      const source = String(p.source);
+      const near = (t: string) => place(t, { quote: source, at: Number(p.at) });
       if (event === "mcp-note") {
-        const quote = String(p.quote);
-        const at = nth(textRef.current, quote, Number(p.occurrence) || 1);
+        const at = near(textRef.current);
         if (at < 0) return;
         const note: Note = {
           id: String(p.id),
           kind: p.kind === "correction" ? "correction" : "note",
-          quote,
+          quote: source,
+          label: String(p.quote),
           comment: String(p.comment),
           suggestion: typeof p.suggestion === "string" ? p.suggestion : null,
           at,
@@ -678,8 +681,7 @@ export function App() {
       } else if (event === "mcp-remove-note") {
         setNotes((list) => list.filter((n) => n.id !== p.id));
       } else if (event === "mcp-replace") {
-        const quote = String(p.quote);
-        applyNoteEdit(quote, (t) => nth(t, quote, Number(p.occurrence) || 1), String(p.replacement));
+        applyNoteEdit(source, near, String(p.replacement));
       }
     },
     [applyNoteEdit],
@@ -917,6 +919,18 @@ export function App() {
     const onKey = (event: KeyboardEvent) => {
       const now = performance.now();
       const target = document.activeElement;
+      // ⌘A / Ctrl+A select the whole field in the Jisho, DeepL and dialog inputs too.
+      if (
+        (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        target.select();
+        return;
+      }
       const ctx: KeyContext = {
         platform,
         target:

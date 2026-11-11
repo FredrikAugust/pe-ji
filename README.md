@@ -54,6 +54,18 @@ The 辞書 panel searches Jisho and shows the word with furigana, JLPT level, wh
 
 翻訳 (⌘T / Ctrl+T) translates the selection, or the caret's line when nothing is selected, with DeepL: Japanese to English, anything else to Japanese. ⌘⇧T opens the panel to type into it. The first time, paste a DeepL API key into the panel; the free tier (500,000 characters a month, keys end in `:fx`) is plenty. The key is stored in the app config folder (`deepl.key`, readable only by you) and only Rust sees it. Translations are remembered for the session. Desktop app only.
 
+## AI (MCP)
+
+編集 → AIと接続… starts an MCP server inside the app (Streamable HTTP at `http://127.0.0.1:4417/mcp`, Bearer token required) and shows the URL and token for your MCP client (Codex, ChatGPT, a local LLM). It stays on in later runs until the token file is removed. Tools:
+
+- `read_document`: file name, source text, current selection.
+- `list_notes`, `add_note` (a note, or a correction with a suggestion), `remove_note`.
+- `replace_text`: edit directly; the learner can undo it.
+
+Quotes must match the source text exactly (`occurrence` picks between repeats). Notes are highlighted on the page and listed in the メモ panel, where a correction can be applied or dismissed. Notes live for the session only.
+
+The server listens on localhost only. For a cloud agent, expose it with a tunnel (for example `cloudflared tunnel --url http://127.0.0.1:4417`) and use the https URL plus `/mcp` with the same token. Anyone with the token can read and edit the open document; delete `mcp.token` in the app config folder to get a new one.
+
 ## Keybindings
 
 Mod is **⌘ on macOS** and **Ctrl on Linux and Windows**. Shortcuts are ignored while an IME composition is active (`compositionstart` / `isComposing` / keyCode 229), and for a short moment after composition ends, so confirming a candidate does not fire the shortcut.

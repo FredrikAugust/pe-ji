@@ -43,3 +43,16 @@ describe("open recent", () => {
     expect(file.items[at + 1]).toMatchObject({ command: "file.recent", path: "/a/作文.txt", label: "　作文.txt" });
   });
 });
+
+import { nth, place, type Note } from "../src/lib/notes";
+
+describe("notes", () => {
+  const note = (quote: string, at: number): Note => ({ id: "n1", kind: "note", quote, comment: "", at });
+  it("finds the nth match and follows the quote after edits", () => {
+    expect(nth("aXbXc", "X", 2)).toBe(3);
+    expect(nth("aXb", "X", 2)).toBe(-1);
+    expect(place("あいう学校です。学校", note("学校", 3))).toBe(3);
+    expect(place("学校です。学校", note("学校", 6))).toBe(5);
+    expect(place("です。", note("学校", 0))).toBe(-1);
+  });
+});

@@ -543,3 +543,26 @@ test("translates the caret's line with Ctrl+T and asks for a key when there is n
   await expect(page.getByTestId("translate-result")).toContainText("API キー");
   await expect(page.getByTestId("deepl-key")).toBeVisible();
 });
+
+test("AI notes highlight the quote, and a correction can be applied", async ({ page }) => {
+  await setDoc(page, "昨日、学校に行きます。\n学校は楽しい。");
+  const mcp = (event: string, payload: object) =>
+    page.evaluate(([e, p]) => (window as unknown as { __picoMcp: (e: string, p: object) => void }).__picoMcp(e, p), [event, payload] as const);
+
+  await mcp("mcp-note", { id: "n1", quote: "行きます", occurrence: 1, comment: "Past tense: 昨日.", kind: "correction", suggestion: "行きました" });
+  await mcp("mcp-note", { id: "n2", quote: "学校", occurrence: 2, comment: "Nice.", kind: "note", suggestion: null });
+  const panel = page.getByTestId("notes");
+  await expect(panel.getByTestId("note")).toHaveCount(2);
+  await expect(page.getByTestId("btn-notes")).toHaveText("メモ（2）");
+  await expect.poll(() => page.evaluate(() => CSS.highlights.get("pico-note")?.size)).toBe(2);
+
+  await panel.getByRole("button", { name: "適用" }).click();
+  await expect.poll(() => markup(page)).toBe("昨日、学校に行きました。\n学校は楽しい。");
+  await expect(panel.getByTestId("note")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => CSS.highlights.get("pico-note")?.size)).toBe(1);
+
+  await mcp("mcp-replace", { quote: "楽しい", occurrence: 1, replacement: "とても楽しい" });
+  await expect.poll(() => markup(page)).toBe("昨日、学校に行きました。\n学校はとても楽しい。");
+  await mcp("mcp-remove-note", { id: "n2" });
+  await expect(panel.getByTestId("note")).toHaveCount(0);
+});

@@ -17,6 +17,10 @@ export interface PageHandle {
   selectAll(): void;
   /** Source selection. Falls back to the last selection on the page when focus is elsewhere. */
   selection(): Selection | null;
+  /** Select a source range and scroll to it. */
+  select(start: number, end: number): void;
+  /** DOM ranges for source ranges (for highlights). */
+  ranges(spans: [number, number][]): Range[];
   edit(fn: (text: string, start: number, end: number) => Edit | null): boolean;
   format(cmd: "bold" | "italic"): void;
   tab(dir: 1 | -1): void;
@@ -298,18 +302,20 @@ export const Page = forwardRef<
     return lastRange.current;
   };
 
+  /** DOM point for a source offset. */
+  const pointAt = (abs: number, els = lineEls(rootRef.current!)): Pt => {
+    const lines = cur.current.lines;
+    let i = 0;
+    let pos = 0;
+    while (i < lines.length - 1 && pos + lines[i].length < abs) pos += lines[i++].length + 1;
+    return locate(els[i], abs - pos);
+  };
+
   const setCaret = (start: number, end: number) => {
     const root = rootRef.current!;
     const els = lineEls(root);
-    const at = (abs: number): Pt => {
-      const lines = cur.current.lines;
-      let i = 0;
-      let pos = 0;
-      while (i < lines.length - 1 && pos + lines[i].length < abs) pos += lines[i++].length + 1;
-      return locate(els[i], abs - pos);
-    };
-    const a = at(start);
-    const b = start === end ? a : at(end);
+    const a = pointAt(start, els);
+    const b = start === end ? a : pointAt(end, els);
     root.focus();
     window.getSelection()?.setBaseAndExtent(a.node, a.offset, b.node, b.offset);
     elOf(b.node)?.scrollIntoView({ block: "nearest" });
@@ -538,6 +544,18 @@ export const Page = forwardRef<
       return { ...s, base: (frag.textContent ?? "").replace(/\u200b/g, "") };
     },
     edit,
+    select: setCaret,
+    ranges(spans) {
+      const els = lineEls(rootRef.current!);
+      return spans.map(([s, e]) => {
+        const a = pointAt(s, els);
+        const b = pointAt(e, els);
+        const r = document.createRange();
+        r.setStart(a.node, a.offset);
+        r.setEnd(b.node, b.offset);
+        return r;
+      });
+    },
     format(cmd) {
       const range = currentRange();
       const root = rootRef.current!;

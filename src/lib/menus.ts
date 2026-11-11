@@ -45,6 +45,8 @@ export const MENUS: MenuDef[] = [
       { label: "やり直す", command: "edit.redo" },
       { separator: true, label: "" },
       { label: "すべて選択", command: "edit.selectAll" },
+      { separator: true, label: "" },
+      { label: "AIと接続…", command: "ai.connect" },
     ],
   },
   {
@@ -60,6 +62,7 @@ export const MENUS: MenuDef[] = [
       { label: "文字サイズを戻す", command: "view.fontReset" },
       { separator: true, label: "" },
       { label: "辞書パネル", command: "dict.toggle" },
+      { label: "メモ・訂正パネル", command: "notes.toggle" },
       { label: "PDFを横に開く／閉じる", command: "view.pdf" },
     ],
   },

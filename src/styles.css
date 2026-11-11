@@ -280,6 +280,11 @@ button, input, select { font-family: inherit; }
 .tr-out { font-family: var(--doc); font-size: 15px; line-height: 1.6; white-space: pre-wrap; user-select: text; }
 .search-row input[type="password"] { font-family: var(--chrome); }
 
+::highlight(pico-note) { background-color: #ffff66; text-decoration: underline wavy #ff0000; }
+.note-quote { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.note-quote .q { font-family: var(--doc); }
+.entry .dialog-actions { margin-top: 4px; }
+
 /* Status */
 
 .status {

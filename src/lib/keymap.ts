@@ -31,6 +31,8 @@ export type CommandId =
   | "view.pdf"
   | "dict.lookup"
   | "translate.toggle"
+  | "notes.toggle"
+  | "ai.connect"
   | "translate.selection"
   | "view.furigana"
   | "view.furi.show"
@@ -71,7 +73,7 @@ export interface Binding {
   when?: "global" | "outside-editor" | "editor";
 }
 
-export type Overlay = "none" | "saveas" | "confirm" | "cheatsheet" | "about";
+export type Overlay = "none" | "saveas" | "confirm" | "cheatsheet" | "about" | "ai";
 
 export interface KeyLike {
   key: string;
@@ -157,7 +159,7 @@ export const KEYMAP: Binding[] = [
   { id: "menu.help", group: "メニュー", label: "ヘルプメニュー", chord: { key: "h", mod: false, shift: false, alt: true } },
 ];
 
-const PROMPTS: Overlay[] = ["saveas", "confirm", "about"];
+const PROMPTS: Overlay[] = ["saveas", "confirm", "about", "ai"];
 
 export function matchKey(e: KeyLike, ctx: KeyContext): CommandId | null {
   if (imeShouldIgnore(e, { composing: ctx.composing, suppressUntil: ctx.suppressUntil }, ctx.now)) {

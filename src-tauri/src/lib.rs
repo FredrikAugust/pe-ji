@@ -1,5 +1,5 @@
-//! Tauri shell: file bytes in, UTF-8 text out, furigana readings, and a
-//! cached Jisho fetch. Decoding (UTF-8 / Shift_JIS) and line endings are
+//! Tauri shell: file bytes in, UTF-8 text out, furigana readings, a cached
+//! Jisho fetch, DeepL, and the MCP server (`mcp.rs`). Decoding (UTF-8 / Shift_JIS) and line endings are
 //! handled in the web view.
 
 use std::borrow::Cow;
@@ -14,6 +14,8 @@ use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
 
 use tauri::{Emitter, Manager};
+
+mod mcp;
 
 /// Set just before a confirmed destroy so `CloseRequested` does not loop.
 static ALLOW_CLOSE: AtomicBool = AtomicBool::new(false);
@@ -206,6 +208,7 @@ fn write_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(mcp::Mcp::default())
         .invoke_handler(tauri::generate_handler![
             read_document,
             write_document,
@@ -215,6 +218,8 @@ pub fn run() {
             set_deepl_key,
             has_deepl_key,
             translate,
+            mcp::mcp_sync,
+            mcp::mcp_start,
             readings
         ])
         .on_window_event(|window, event| {

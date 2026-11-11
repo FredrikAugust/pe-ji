@@ -18,7 +18,7 @@ import {
   FURI_MODES,
   type FuriMode,
 } from "./lib/document";
-import { insertTable, setBlock, type Block } from "./lib/edit";
+import { insertTable, replace, setBlock, type Block } from "./lib/edit";
 import {
   firstEnabledIndex,
   menuCommand,
@@ -55,11 +55,14 @@ import type { Kind } from "./lib/parser";
 import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
 import { Dict } from "./ui/Dict";
 import { Translate } from "./ui/Translate";
+import { Notes } from "./ui/Notes";
+import { nth, place, type Note } from "./lib/notes";
 import { Page, type PageHandle } from "./ui/Page";
 
 const HIT_KEY = "pico-sakubun-hits";
 const HIT_SESSION = "pico-sakubun-hit-session";
 const FURI_KEY = "pico.furigana";
+const AI_KEY = "pico.ai";
 const RECENT_KEY = "pico.recent";
 
 export function App() {
@@ -122,6 +125,9 @@ export function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
   const [trOpen, setTrOpen] = useState(false);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [ai, setAi] = useState<{ url: string; token: string } | null>(null);
   const [trSeed, setTrSeed] = useState<{ q: string; n: number } | null>(null);
   const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
 
@@ -435,6 +441,27 @@ export function App() {
           setDictSeed((prev) => ({ q: base, n: (prev?.n ?? 0) + 1 }));
           break;
         }
+        case "notes.toggle":
+          setNotesOpen((open) => !open);
+          break;
+        case "ai.connect":
+          if (!isTauri()) {
+            flash("AI 接続はデスクトップ版だけです");
+            break;
+          }
+          void import("@tauri-apps/api/core")
+            .then(({ invoke }) => invoke<{ url: string; token: string }>("mcp_start"))
+            .then((info) => {
+              setAi(info);
+              setOverlay("ai");
+              try {
+                localStorage.setItem(AI_KEY, "1");
+              } catch {
+                // Auto-connect next time is a convenience only.
+              }
+            })
+            .catch((err) => flash(`AI 接続を開始できませんでした：${String(err)}`));
+          break;
         case "translate.toggle":
           setTrOpen((open) => !open);
           break;
@@ -497,6 +524,7 @@ export function App() {
             })();
           } else if (
             overlayRef.current === "about" ||
+            overlayRef.current === "ai" ||
             overlayRef.current === "cheatsheet"
           ) {
             setOverlay("none");
@@ -545,6 +573,122 @@ export function App() {
       // Remembering the mode is a convenience only.
     }
   }, [furi]);
+
+  // --- AI (MCP): Rust serves reads from a snapshot and sends writes here as events.
+  const applyNoteEdit = useCallback((quote: string, find: (t: string) => number, replacement: string) => {
+    pageRef.current?.edit((t) => {
+      const i = find(t);
+      return i < 0 ? null : replace(t, i, i + quote.length, replacement);
+    });
+  }, []);
+
+  const onMcp = useCallback(
+    (event: string, p: Record<string, unknown>) => {
+      if (event === "mcp-note") {
+        const quote = String(p.quote);
+        const at = nth(textRef.current, quote, Number(p.occurrence) || 1);
+        if (at < 0) return;
+        const note: Note = {
+          id: String(p.id),
+          kind: p.kind === "correction" ? "correction" : "note",
+          quote,
+          comment: String(p.comment),
+          suggestion: typeof p.suggestion === "string" ? p.suggestion : null,
+          at,
+        };
+        setNotes((list) => [...list, note]);
+        setNotesOpen(true);
+      } else if (event === "mcp-remove-note") {
+        setNotes((list) => list.filter((n) => n.id !== p.id));
+      } else if (event === "mcp-replace") {
+        const quote = String(p.quote);
+        applyNoteEdit(quote, (t) => nth(t, quote, Number(p.occurrence) || 1), String(p.replacement));
+      }
+    },
+    [applyNoteEdit],
+  );
+
+  useEffect(() => {
+    (window as unknown as { __picoMcp: typeof onMcp }).__picoMcp = onMcp;
+    if (!isTauri()) return;
+    let done = false;
+    const stops: (() => void)[] = [];
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      for (const name of ["mcp-note", "mcp-remove-note", "mcp-replace"])
+        void listen<Record<string, unknown>>(name, (e) => onMcp(name, e.payload)).then((stop) =>
+          done ? stop() : stops.push(stop),
+        );
+    });
+    return () => {
+      done = true;
+      stops.forEach((stop) => stop());
+    };
+  }, [onMcp]);
+
+  useEffect(() => {
+    try {
+      if (isTauri() && localStorage.getItem(AI_KEY) === "1")
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke<{ url: string; token: string }>("mcp_start").then(setAi, () => {}),
+        );
+    } catch {
+      // No storage: the user connects from the menu.
+    }
+  }, []);
+
+  // Push the document to Rust a moment after it, the selection or the notes change.
+  useEffect(() => {
+    if (!ai) return;
+    let timer = 0;
+    const push = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke("mcp_sync", {
+            name: filenameRef.current,
+            text: textRef.current,
+            selection: pageRef.current?.selection()?.base ?? "",
+            notes: notes.map(({ at: _, ...n }) => n),
+          }),
+        );
+      }, 300);
+    };
+    push();
+    document.addEventListener("selectionchange", push);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("selectionchange", push);
+    };
+  }, [ai, text, notes]);
+
+  // Highlight noted quotes without touching the page DOM (CSS Custom Highlight API).
+  useEffect(() => {
+    const el = pageRef.current?.element;
+    if (!el || typeof Highlight === "undefined") return;
+    let frame = 0;
+    const paint = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const spans = notes
+          .map((n) => [place(textRef.current, n), n.quote.length])
+          .filter(([at]) => at >= 0)
+          .map(([at, len]) => [at, at + len] as [number, number]);
+        try {
+          CSS.highlights.set("pico-note", new Highlight(...(pageRef.current?.ranges(spans) ?? [])));
+        } catch {
+          CSS.highlights.delete("pico-note");
+        }
+      });
+    };
+    paint();
+    // Readings arrive later and repaint lines, so follow the DOM, not just the text.
+    const mo = new MutationObserver(paint);
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => {
+      mo.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [notes]);
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     if (!isTauri()) return;
@@ -756,7 +900,8 @@ export function App() {
           (            ctx.overlay === "saveas" ||
             ctx.overlay === "confirm" ||
             ctx.overlay === "cheatsheet" ||
-            ctx.overlay === "about") &&
+            ctx.overlay === "about" ||
+            ctx.overlay === "ai") &&
           (event.ctrlKey || event.metaKey)
         ) {
           event.preventDefault();
@@ -985,6 +1130,15 @@ export function App() {
         >
           翻訳
         </button>
+        <button
+          type="button"
+          className={`tbtn${notesOpen ? " on" : ""}`}
+          data-testid="btn-notes"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("notes.toggle")}
+        >
+          メモ{notes.length > 0 ? `（${notes.length}）` : ""}
+        </button>
         <div className="sep" />
         <button
           type="button"
@@ -1020,6 +1174,21 @@ export function App() {
         )}
         {dictOpen && <Dict seed={dictSeed} />}
         {trOpen && <Translate seed={trSeed} />}
+        {notesOpen && (
+          <Notes
+            notes={notes}
+            text={text}
+            onPick={(n) => {
+              const at = place(textRef.current, n);
+              if (at >= 0) pageRef.current?.select(at, at + n.quote.length);
+            }}
+            onApply={(n) => {
+              applyNoteEdit(n.quote, (t) => place(t, n), n.suggestion ?? n.quote);
+              setNotes((list) => list.filter((x) => x.id !== n.id));
+            }}
+            onRemove={(id) => setNotes((list) => list.filter((x) => x.id !== id))}
+          />
+        )}
       </div>
 
       <footer className="status">
@@ -1205,6 +1374,40 @@ export function App() {
                     onClick={() => run("dialog.cancel")}
                   >
                     キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {overlay === "ai" && ai && (
+            <div
+              className="dialog prompt"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ai-title"
+              data-testid="ai-dialog"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="dialog-title" id="ai-title">
+                AIと接続（MCP）
+              </div>
+              <div className="dialog-body">
+                <p>MCP に対応した AI（Codex、ChatGPT、ローカル LLM など）に次を設定してください。AI は作文を読んで、メモや訂正を付けられます。</p>
+                <label className="field">
+                  URL（Streamable HTTP）
+                  <input readOnly value={ai.url} onFocus={(e) => e.target.select()} />
+                </label>
+                <label className="field">
+                  Bearer トークン
+                  <input readOnly value={ai.token} onFocus={(e) => e.target.select()} />
+                </label>
+                <p className="cheat-note">
+                  クラウドの AI から使うときは、トンネルで公開します（例：<code>cloudflared tunnel --url http://127.0.0.1:4417</code>）。出てきた https の URL に <code>/mcp</code> を付けて、同じトークンを使います。トークンを知っている人は作文を読めて書けます。
+                </p>
+                <div className="dialog-actions">
+                  <button type="button" className="tbtn cyan" onClick={() => run("dialog.cancel")}>
+                    閉じる
                   </button>
                 </div>
               </div>

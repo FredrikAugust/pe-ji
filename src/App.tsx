@@ -54,6 +54,7 @@ import {
 import type { Kind } from "./lib/parser";
 import { SAMPLE, SAMPLE_NAME, UNTITLED_NAME } from "./lib/sample";
 import { Dict } from "./ui/Dict";
+import { Translate } from "./ui/Translate";
 import { Page, type PageHandle } from "./ui/Page";
 
 const HIT_KEY = "pico-sakubun-hits";
@@ -120,6 +121,8 @@ export function App() {
   const pageRef = useRef<PageHandle>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+  const [trOpen, setTrOpen] = useState(false);
+  const [trSeed, setTrSeed] = useState<{ q: string; n: number } | null>(null);
   const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
 
   const showPdf = useCallback((bytes: BlobPart, name: string) => {
@@ -430,6 +433,22 @@ export function App() {
           const base = pageRef.current?.selection()?.base.trim() ?? "";
           setDictOpen(true);
           setDictSeed((prev) => ({ q: base, n: (prev?.n ?? 0) + 1 }));
+          break;
+        }
+        case "translate.toggle":
+          setTrOpen((open) => !open);
+          break;
+        case "translate.selection": {
+          let q = pageRef.current?.selection()?.base.trim() ?? "";
+          if (!q) {
+            // Nothing selected: the caret's line, readings left out.
+            const node = window.getSelection()?.anchorNode;
+            const line = (node instanceof Element ? node : node?.parentElement)?.closest(".ln")?.cloneNode(true) as HTMLElement | undefined;
+            line?.querySelectorAll("rt, rp, .nt").forEach((n) => n.remove());
+            q = line?.textContent?.trim() ?? "";
+          }
+          setTrOpen(true);
+          setTrSeed((prev) => ({ q, n: (prev?.n ?? 0) + 1 }));
           break;
         }
         case "view.furigana":
@@ -957,6 +976,15 @@ export function App() {
         >
           宿題PDF
         </button>
+        <button
+          type="button"
+          className={`tbtn${trOpen ? " on" : ""}`}
+          data-testid="btn-translate"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => run("translate.toggle")}
+        >
+          翻訳
+        </button>
         <div className="sep" />
         <button
           type="button"
@@ -991,6 +1019,7 @@ export function App() {
           </aside>
         )}
         {dictOpen && <Dict seed={dictSeed} />}
+        {trOpen && <Translate seed={trSeed} />}
       </div>
 
       <footer className="status">

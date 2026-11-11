@@ -30,6 +30,8 @@ export type CommandId =
   | "dict.toggle"
   | "view.pdf"
   | "dict.lookup"
+  | "translate.toggle"
+  | "translate.selection"
   | "view.furigana"
   | "view.furi.show"
   | "view.furi.hide"
@@ -131,6 +133,8 @@ export const KEYMAP: Binding[] = [
   { id: "format.indent", group: "書式", label: "字下げ（表では次のセル）", chord: { key: "Tab", mod: false, shift: false, alt: false }, when: "editor" },
   { id: "format.outdent", group: "書式", label: "字下げを戻す", chord: { key: "Tab", mod: false, shift: true, alt: false }, when: "editor" },
   { id: "dict.lookup", group: "辞書", label: "選択中の語を辞書で引く", chord: { key: "d", mod: true, shift: false, alt: false } },
+  { id: "translate.selection", group: "辞書", label: "選択中の文（なければ今の行）を翻訳", chord: { key: "t", mod: true, shift: false, alt: false } },
+  { id: "translate.toggle", group: "辞書", label: "翻訳パネル", chord: { key: "t", mod: true, shift: true, alt: false } },
   { id: "view.furigana", group: "表示", label: "ふりがなを切替", chord: { key: "f", mod: true, shift: true, alt: false } },
   { id: "view.fontUp", group: "表示", label: "文字を大きく", chord: { key: "=", mod: true, shift: false, alt: false } },
   { id: "view.fontUp", group: "表示", label: "文字を大きく", chord: { key: "+", mod: true, shift: true, alt: false } },

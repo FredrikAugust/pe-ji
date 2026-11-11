@@ -110,6 +110,52 @@ async fn jisho(app: tauri::AppHandle, keyword: String) -> Result<String, String>
     Ok(body)
 }
 
+fn deepl_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app.path().app_config_dir().map_err(|e| e.to_string())?.join("deepl.key"))
+}
+
+/// Store the DeepL API key in the app config folder, readable by this user only.
+#[tauri::command]
+fn set_deepl_key(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    let file = deepl_key_file(&app)?;
+    fs::create_dir_all(file.parent().unwrap()).map_err(|e| e.to_string())?;
+    write_atomic(&file, key.trim().as_bytes()).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn has_deepl_key(app: tauri::AppHandle) -> bool {
+    deepl_key_file(&app).map(|f| f.exists()).unwrap_or(false)
+}
+
+/// Raw DeepL JSON for one text. Free keys (ending in `:fx`) use the free endpoint.
+#[tauri::command]
+async fn translate(app: tauri::AppHandle, text: String, target: String) -> Result<String, String> {
+    let key = fs::read_to_string(deepl_key_file(&app)?).map_err(|_| "NO_KEY".to_string())?;
+    let key = key.trim();
+    let host = if key.ends_with(":fx") { "api-free.deepl.com" } else { "api.deepl.com" };
+    let body = serde_json::json!({ "text": [text], "target_lang": target });
+    let res = reqwest::Client::new()
+        .post(format!("https://{host}/v2/translate"))
+        .header("Authorization", format!("DeepL-Auth-Key {key}"))
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    match res.status().as_u16() {
+        200 => res.text().await.map_err(|e| e.to_string()),
+        403 => Err("BAD_KEY".into()),
+        456 => Err("QUOTA".into()),
+        code => Err(format!("DeepL {code}")),
+    }
+}
+
 /// Open a Jisho page in the default browser. Only jisho.org URLs are accepted.
 #[tauri::command]
 fn open_jisho(url: String) -> Result<(), String> {
@@ -166,6 +212,9 @@ pub fn run() {
             force_close,
             jisho,
             open_jisho,
+            set_deepl_key,
+            has_deepl_key,
+            translate,
             readings
         ])
         .on_window_event(|window, event| {

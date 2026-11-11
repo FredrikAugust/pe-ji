@@ -50,6 +50,10 @@ Furigana is automatic and only drawn, never written to the file. The desktop app
 
 The 辞書 panel searches Jisho and shows the word with furigana, JLPT level, whether it is common, each sense with its part of speech, Jisho's notes (for example "Usually written using kana alone"), other spellings, and a link to the Jisho page. In the desktop app the request goes through Rust, and every answer, misses included, is cached under the app cache folder (`jisho/`). Each word is fetched once per session in memory as well. In a plain browser (dev only) the page calls Jisho directly, which needs Jisho to allow CORS.
 
+## Translation
+
+翻訳 (⌘T / Ctrl+T) translates the selection, or the caret's line when nothing is selected, with DeepL: Japanese to English, anything else to Japanese. ⌘⇧T opens the panel to type into it. The first time, paste a DeepL API key into the panel; the free tier (500,000 characters a month, keys end in `:fx`) is plenty. The key is stored in the app config folder (`deepl.key`, readable only by you) and only Rust sees it. Translations are remembered for the session. Desktop app only.
+
 ## Keybindings
 
 Mod is **⌘ on macOS** and **Ctrl on Linux and Windows**. Shortcuts are ignored while an IME composition is active (`compositionstart` / `isComposing` / keyCode 229), and for a short moment after composition ends, so confirming a candidate does not fire the shortcut.
@@ -69,6 +73,8 @@ Mod is **⌘ on macOS** and **Ctrl on Linux and Windows**. Shortcuts are ignored
 | 字下げ Indent / outdent (next / previous cell in a table) | Tab / Shift+Tab | Tab / ⇧Tab |
 | 元に戻す / やり直す Undo / redo | Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y | ⌘Z / ⌘⇧Z |
 | 辞書で引く Look up selection | Ctrl+D | ⌘D |
+| 翻訳 Translate selection or line | Ctrl+T | ⌘T |
+| 翻訳パネル Translate panel | Ctrl+Shift+T | ⌘⇧T |
 | ふりがなを切替 Cycle furigana | Ctrl+Shift+F | ⌘⇧F |
 | 文字を大きく Larger type | Ctrl+= or Ctrl++ | ⌘= or ⌘+ |
 | 文字を小さく Smaller type | Ctrl+- | ⌘- |

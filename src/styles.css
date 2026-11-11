@@ -274,6 +274,12 @@ button, input, select { font-family: inherit; }
 .pdf-close { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 4px; }
 .pdfpane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 
+.tr-row { flex-direction: column; }
+.tr-row textarea { font-family: var(--doc); font-size: 14px; resize: vertical; border: 2px solid; border-color: #000 #fff #fff #000; padding: 4px 6px; }
+.tr-row .tbtn { align-self: flex-end; }
+.tr-out { font-family: var(--doc); font-size: 15px; line-height: 1.6; white-space: pre-wrap; user-select: text; }
+.search-row input[type="password"] { font-family: var(--chrome); }
+
 /* Status */
 
 .status {

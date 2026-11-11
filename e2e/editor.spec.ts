@@ -520,3 +520,26 @@ test("opens a PDF beside the page and closes it", async ({ page }) => {
   await page.getByRole("button", { name: "PDFを閉じる" }).click();
   await expect(pane).toHaveCount(0);
 });
+
+test("translates the caret's line with Ctrl+T and asks for a key when there is none", async ({ page }) => {
+  await page.evaluate(() => {
+    const w = window as unknown as { __picoTranslate: unknown; calls: string[] };
+    w.calls = [];
+    w.__picoTranslate = async (text: string, target: string) => {
+      w.calls.push(`${target}:${text}`);
+      if (text.startsWith("鍵")) throw "NO_KEY";
+      return JSON.stringify({ translations: [{ text: "I studied yesterday.", detected_source_language: "JA" }] });
+    };
+  });
+  await setDoc(page, "- 昨日《きのう》勉強した。\n鍵");
+  await placeCaret(page, "勉強");
+  await chord(page, "t", { ctrl: true });
+  await expect(page.getByTestId("translate-result")).toHaveText("I studied yesterday.");
+  await chord(page, "t", { ctrl: true });
+  expect(await page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual(["EN-US:昨日勉強した。"]);
+
+  await placeCaret(page, "鍵");
+  await chord(page, "t", { ctrl: true });
+  await expect(page.getByTestId("translate-result")).toContainText("API キー");
+  await expect(page.getByTestId("deepl-key")).toBeVisible();
+});

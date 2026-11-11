@@ -93,6 +93,9 @@ export const MENUS: MenuDef[] = [
     items: [
       { label: "ことばサーチ", command: "dict.toggle" },
       { label: "選択中の語を検索", command: "dict.lookup" },
+      { separator: true, label: "" },
+      { label: "翻訳パネル", command: "translate.toggle" },
+      { label: "選択中の文を翻訳", command: "translate.selection" },
     ],
   },
   {
@@ -189,6 +192,7 @@ export async function popupContextMenu(run: (cmd: CommandId) => void): Promise<v
       { text: "斜体", action: () => run("format.italic") },
       { item: "Separator" },
       { text: "辞書で引く", action: () => run("dict.lookup") },
+      { text: "翻訳する", action: () => run("translate.selection") },
       { item: "Separator" },
       { item: "SelectAll" },
     ],

@@ -16,6 +16,7 @@ tauri-build = { version = "2.7.4", features = [] }
 [dependencies]
 lindera = { version = "6.2.0", default-features = false, features = ["embed-ipadic"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"] }
+serde_json = "1.0.154"
 tauri = { version = "2.12.5", features = [] }
 tauri-plugin-dialog = "2.8.4"
 

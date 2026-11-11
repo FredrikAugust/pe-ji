@@ -39,6 +39,8 @@ html, body, #root {
   height: 100%;
   margin: 0;
 }
+/* The window itself never scrolls or rubber-bands; only the panes inside it do. */
+html, body { overflow: hidden; overscroll-behavior: none; }
 
 body {
   font-family: var(--chrome);
@@ -455,7 +457,7 @@ code { font-family: var(--doc); background: var(--field); padding: 0 4px; border
 @page { margin: 20mm 18mm; }
 
 @media print {
-  html, body, #root, .app { height: auto; background: #fff; }
+  html, body, #root, .app { height: auto; background: #fff; overflow: visible; }
   ::highlight(pico-note) { background-color: transparent; text-decoration: none; }
   .menubar, .tb, .side, .pdfpane, .splitter, .status, .overlay { display: none; }
   .desk { overflow: visible; padding: 0; background: #fff; }

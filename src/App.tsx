@@ -305,9 +305,9 @@ export function App() {
     setOverlay("none");
   }, [flash, saveAsDraft, saveBrowser]);
 
-  const remember = useCallback((path: string) => {
+  const updateRecent = useCallback((change: (list: string[]) => string[]) => {
     setRecent((list) => {
-      const next = [path, ...list.filter((p) => p !== path)].slice(0, 10);
+      const next = change(list);
       try {
         localStorage.setItem(RECENT_KEY, JSON.stringify(next));
       } catch {
@@ -316,6 +316,18 @@ export function App() {
       return next;
     });
   }, []);
+  const remember = useCallback((path: string) => updateRecent((list) => [path, ...list.filter((p) => p !== path)].slice(0, 10)), [updateRecent]);
+  // Drop files that were deleted or moved, each time the welcome screen shows (and after a failed open).
+  const pruneRecent = useCallback(async () => {
+    if (!isTauri()) return;
+    const { invoke } = await import("@tauri-apps/api/core");
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+    const alive = new Set(await invoke<string[]>("existing_paths", { paths: list }));
+    updateRecent((current) => current.filter((p) => alive.has(p) || !list.includes(p)));
+  }, [updateRecent]);
+  useEffect(() => {
+    if (welcome) pruneRecent().catch(() => {});
+  }, [welcome, pruneRecent]);
 
   const openPath = useCallback(
     async (path: string) => {
@@ -325,6 +337,7 @@ export function App() {
         bytes = await invoke<ArrayBuffer>("read_document", { path });
       } catch (err) {
         flash(`開けませんでした：${String(err)}`);
+        pruneRecent().catch(() => {});
         return;
       }
       try {
@@ -334,7 +347,7 @@ export function App() {
         flash("UTF-8 でも Shift_JIS でもありません");
       }
     },
-    [flash, loadDoc, remember],
+    [flash, loadDoc, remember, pruneRecent],
   );
 
   const doOpen = useCallback(async () => {

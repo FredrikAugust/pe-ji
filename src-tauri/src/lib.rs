@@ -28,6 +28,12 @@ fn read_document(path: String) -> Result<tauri::ipc::Response, String> {
     fs::read(&path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
 }
 
+/// The paths that are still files, for pruning the recent list.
+#[tauri::command]
+fn existing_paths(paths: Vec<String>) -> Vec<String> {
+    paths.into_iter().filter(|p| Path::new(p).is_file()).collect()
+}
+
 #[tauri::command]
 fn write_document(path: String, contents: String) -> Result<(), String> {
     write_atomic(Path::new(&path), contents.as_bytes()).map_err(|e| e.to_string())
@@ -217,6 +223,7 @@ pub fn run() {
         .manage(mcp::Mcp::default())
         .invoke_handler(tauri::generate_handler![
             read_document,
+            existing_paths,
             write_document,
             force_close,
             jisho,

@@ -817,7 +817,7 @@ test("deleting everything leaves one empty line to type in", async ({ page }) =>
   const box = page.getByTestId("editor");
   await box.click();
   await page.keyboard.insertText("あ");
-  await page.keyboard.press("Meta+a");
+  await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.press("Backspace");
   await page.keyboard.press("Backspace");
   await expect(box.locator(":scope > .ln")).toHaveCount(1);
@@ -835,9 +835,9 @@ test("every undo step changes something", async ({ page }) => {
   await page.waitForTimeout(1100);
   await page.keyboard.insertText("う");
   await expect.poll(() => markup(page)).toBe("あう");
-  await page.keyboard.press("Meta+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await expect.poll(() => markup(page)).toBe("あ");
-  await page.keyboard.press("Meta+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await expect.poll(() => markup(page)).toBe("");
 });
 

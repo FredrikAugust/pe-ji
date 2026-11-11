@@ -63,6 +63,7 @@ const HIT_KEY = "pico-sakubun-hits";
 const HIT_SESSION = "pico-sakubun-hit-session";
 const FURI_KEY = "pico.furigana";
 const AI_KEY = "pico.ai";
+const PDF_WIDTH_KEY = "pico.pdfWidth";
 const RECENT_KEY = "pico.recent";
 
 export function App() {
@@ -149,6 +150,22 @@ export function App() {
     const { invoke } = await import("@tauri-apps/api/core");
     showPdf(await invoke<ArrayBuffer>("read_document", { path }), basename(path));
   }, [showPdf]);
+
+  const [pdfWidth, setPdfWidth] = useState(() => {
+    try {
+      return Number(localStorage.getItem(PDF_WIDTH_KEY)) || 480;
+    } catch {
+      return 480;
+    }
+  });
+  const resizePdf = (w: number) => setPdfWidth(Math.round(Math.min(Math.max(w, 200), window.innerWidth - 360)));
+  const savePdfWidth = () => {
+    try {
+      localStorage.setItem(PDF_WIDTH_KEY, String(pdfWidth));
+    } catch {
+      // Width is a convenience only.
+    }
+  };
   const saveAsInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(cmd: CommandId) => void>(() => {});
@@ -549,6 +566,48 @@ export function App() {
   );
   runRef.current = run;
 
+  /** A file dropped on the window: a PDF opens beside the page, .txt/.md opens for editing. */
+  const dropped = useRef<(name: string, read: () => Promise<ArrayBuffer>, path?: string, file?: File) => void>(() => {});
+  dropped.current = (name, read, path, file) => {
+    if (/\.pdf$/i.test(name)) void read().then((b) => showPdf(b, basename(name)));
+    else if (!/\.(txt|md)$/i.test(name)) flash("開けるのは .txt・.md・.pdf です");
+    else if (path) guard(() => void openPath(path));
+    else if (file) guard(() => void openFile(file));
+  };
+
+  useEffect(() => {
+    if (isTauri()) {
+      let stop: (() => void) | null = null;
+      let done = false;
+      void Promise.all([import("@tauri-apps/api/webview"), import("@tauri-apps/api/core")]).then(([{ getCurrentWebview }, { invoke }]) =>
+        getCurrentWebview()
+          .onDragDropEvent((e) => {
+            if (e.payload.type !== "drop") return;
+            const path = e.payload.paths[0];
+            if (path) dropped.current(path, () => invoke<ArrayBuffer>("read_document", { path }), path);
+          })
+          .then((un) => (done ? un() : (stop = un))),
+      );
+      return () => {
+        done = true;
+        stop?.();
+      };
+    }
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => {
+      const file = e.dataTransfer?.files[0];
+      if (!file) return;
+      e.preventDefault();
+      dropped.current(file.name, () => file.arrayBuffer(), undefined, file);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
+
   const pick = useCallback(
     (item: MenuItem) => {
       const path = item.path;
@@ -925,7 +984,10 @@ export function App() {
   async function onPickedFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (file) await openFile(file);
+  }
+
+  async function openFile(file: File) {
     try {
       loadDoc(
         decodeText(new Uint8Array(await file.arrayBuffer())),
@@ -1152,6 +1214,38 @@ export function App() {
       </div>
 
       <div className="main">
+        {pdf && (
+          <>
+            <aside className="pdfpane" data-testid="pdfpane" aria-label="PDF" style={{ flexBasis: pdfWidth }}>
+              <div className="dict-cap">
+                <span className="pdf-name">{pdf.name}</span>
+                <button type="button" className="pdf-close" aria-label="PDFを閉じる" onClick={() => run("view.pdf")}>
+                  ×
+                </button>
+              </div>
+              <iframe src={pdf.url} title={pdf.name} />
+            </aside>
+            <div
+              className="splitter"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="PDFの幅"
+              aria-valuenow={pdfWidth}
+              tabIndex={0}
+              data-testid="pdf-splitter"
+              onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+              onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && resizePdf(e.clientX)}
+              onPointerUp={savePdfWidth}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                  e.preventDefault();
+                  resizePdf(pdfWidth + (e.key === "ArrowRight" ? 40 : -40));
+                }
+              }}
+              onKeyUp={savePdfWidth}
+            />
+          </>
+        )}
         <div className="desk">
           <Page ref={pageRef} doc={doc} empty={text.length === 0}
             furi={furi}
@@ -1161,17 +1255,6 @@ export function App() {
             onKind={setKind}
           />
         </div>
-        {pdf && (
-          <aside className="pdfpane" data-testid="pdfpane" aria-label="PDF">
-            <div className="dict-cap">
-              {pdf.name}
-              <button type="button" className="pdf-close" aria-label="PDFを閉じる" onClick={() => run("view.pdf")}>
-                ×
-              </button>
-            </div>
-            <iframe src={pdf.url} title={pdf.name} />
-          </aside>
-        )}
         {dictOpen && <Dict seed={dictSeed} />}
         {trOpen && <Translate seed={trSeed} />}
         {notesOpen && (

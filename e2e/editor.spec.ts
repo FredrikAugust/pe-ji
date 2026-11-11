@@ -566,3 +566,42 @@ test("AI notes highlight the quote, and a correction can be applied", async ({ p
   await mcp("mcp-remove-note", { id: "n2" });
   await expect(panel.getByTestId("note")).toHaveCount(0);
 });
+
+async function dropFile(page: Page, name: string, type: string, body: string) {
+  await page.evaluate(
+    ([name, type, body]) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([body], name, { type }));
+      window.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    },
+    [name, type, body] as const,
+  );
+}
+
+test("the PDF sits left of the page, resizes, and dropped files open", async ({ page }) => {
+  await dropFile(page, "宿題.pdf", "application/pdf", "%PDF-1.4\n%%EOF\n");
+  const pane = page.getByTestId("pdfpane");
+  await expect(pane).toContainText("宿題.pdf");
+  const paneBox = (await pane.boundingBox())!;
+  const deskBox = (await page.locator(".desk").boundingBox())!;
+  expect(paneBox.x).toBe(0);
+  expect(paneBox.x + paneBox.width).toBeLessThan(deskBox.x);
+
+  // The close button is centred in the title bar.
+  const cap = (await pane.locator(".dict-cap").boundingBox())!;
+  const close = (await page.getByRole("button", { name: "PDFを閉じる" }).boundingBox())!;
+  expect(Math.abs(close.y + close.height / 2 - (cap.y + cap.height / 2))).toBeLessThan(1);
+
+  const splitter = page.getByTestId("pdf-splitter");
+  const s = (await splitter.boundingBox())!;
+  await page.mouse.move(s.x + 3, s.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(300, s.y + 100, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await pane.boundingBox())!.width).toBe(300);
+
+  await dropFile(page, "作文.txt", "text/plain", "ドロップした作文");
+  await expect.poll(() => markup(page)).toBe("ドロップした作文");
+  await dropFile(page, "x.docx", "application/octet-stream", "x");
+  await expect(page.getByTestId("status-message")).toContainText(".pdf");
+});

@@ -1,4 +1,4 @@
-<p align="center"><img src="src-tauri/icons/icon.png" alt="pe-ji logo: a yellow あ on a blue tile" width="160"></p>
+<p align="center"><img src="src-tauri/icons/128x128@2x.png" alt="pe-ji logo: a cream あ on a blue macOS-style tile" width="128"></p>
 
 # pe-ji
 

@@ -7,6 +7,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import appIcon from "./assets/appicon-16.png";
 import {
   countChars,
   countLines,
@@ -1109,6 +1110,7 @@ export function App() {
       data-dirty={dirty ? "yes" : "no"}
     >
       <nav className="menubar" ref={menuBarRef} aria-label="メニュー" data-tauri-drag-region>
+        <img className="app-ico" src={appIcon} width={16} height={16} alt="" aria-hidden="true" />
         {menus.map((menu) => (
           <div
             key={menu.id}

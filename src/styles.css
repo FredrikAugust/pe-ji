@@ -70,6 +70,15 @@ input, textarea, select { background: var(--field); color: var(--ink); }
   z-index: 5;
 }
 
+.app-ico {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: auto 8px;
+  display: block;
+  pointer-events: none;
+}
+
 .menu { position: relative; display: flex; }
 
 .menu-btn {
